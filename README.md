@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/logo.svg" alt="BreatheWise AI logo" width="96" height="96" />
-
-# BreatheWise AI
+<img src="docs/logo.png" alt="BreatheWise AI" width="520" />
 
 **Breathe smarter. Live healthier.**
 

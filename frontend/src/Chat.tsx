@@ -116,7 +116,7 @@ export default function Chat() {
       {open && (
         <div className="chat" role="dialog" aria-label={t("chat_title")}>
           <header>
-            <img src="/logo.svg" alt="" />
+            <img src="/logo-96.png" alt="" />
             <div><b>{t("chat_title")}</b><div className="small" style={{ opacity: .85 }}>{place ? `📍 ${place.name}` : tx("AI air assistant", "AI वायु सहायक")}</div></div>
             <button onClick={close} aria-label={tx("Close chat", "चैट बंद करें")}>✕</button>
           </header>

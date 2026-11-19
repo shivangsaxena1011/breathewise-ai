@@ -22,7 +22,7 @@ export function cityTimeAhead(snap: Snapshot | null, hoursAhead: number): string
 function notify(body: string) {
   try {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    const opts = { body, icon: "/logo.svg" };
+    const opts = { body, icon: "/logo-192.png" };
     if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.ready.then((r) => r.showNotification("BreatheWise", opts)).catch(() => {});
     } else {

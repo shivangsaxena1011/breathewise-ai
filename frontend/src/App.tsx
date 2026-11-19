@@ -54,8 +54,11 @@ export default function App() {
       <div className="shell">
         <header className="top">
           <a className="brand" href="#today" aria-label={tx("BreatheWise AI home", "BreatheWise AI होम")}>
-            <img src="/logo.svg" alt="" width={44} height={44} />
-            <div><h1>Breathe<span>Wise</span> AI</h1><small>{t("tagline")}</small></div>
+            <img src="/logo-96.png" alt="" width={46} height={46} />
+            <div>
+              <h1 className="wordmark"><span className="w-light">Breathe</span><span className="w-bold">Wise</span> <span className="w-ai">AI</span></h1>
+              <small>{t("tagline")}</small>
+            </div>
           </a>
           <div className="lang" role="group" aria-label={tx("Language", "भाषा")}>
             <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>

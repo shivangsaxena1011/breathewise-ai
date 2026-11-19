@@ -1,7 +1,7 @@
 // Low-internet mode: cache the app shell (HTML + built JS/CSS) so the app opens offline.
 // API calls are never answered from this cache: when offline they fail, and the app falls back to the
 // last reading it saved itself and shows an "offline — data from <time>" banner, so old AQI never looks live.
-const SHELL = "bw-shell-v4";
+const SHELL = "bw-shell-v5";
 
 async function precache() {
   const cache = await caches.open(SHELL);
@@ -10,7 +10,7 @@ async function precache() {
   const html = await res.clone().text();
   await cache.put("/", res);
   const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
-  await cache.addAll(["/logo.svg", "/manifest.webmanifest", ...assets]);
+  await cache.addAll(["/logo-96.png", "/favicon.png", "/manifest.webmanifest", ...assets]);
 }
 
 self.addEventListener("install", (e) => {
