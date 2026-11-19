@@ -54,10 +54,10 @@ Techniques used:
 - **Graceful degradation**: if Gemini is unavailable or out of quota, the app tries fallback models and then answers with rule-based guidance, so the demo never breaks.
 
 ## Tech stack
-React + TypeScript (Vite), FastAPI (Python), Google Gemini through the `google-genai` SDK (text, JSON mode, vision), Open-Meteo / CAMS air-quality, weather and geocoding APIs, SQLite, and Docker on Google Cloud Run.
+React + TypeScript (Vite), FastAPI (Python), Google Gemini through the `google-genai` SDK (text, JSON mode, vision), Open-Meteo / CAMS air-quality, weather and geocoding APIs, SQLite, and FastAPI on Vercel serverless functions.
 
 ## Quality
-- 67 automated tests (60 backend, 7 frontend).
+- 68 automated tests (61 backend, 7 frontend).
 - Security: the key stays on the server, input is validated, requests are rate-limited, uploads are checked by file signature, and responses carry a CSP.
 - Accessibility: semantic tabs, labels, keyboard support, AQI shown as text and not by colour alone, and reduced-motion support.
 - Privacy: no accounts, report locations rounded to about 100 m, photos never stored, and the tracker stays on the device.

@@ -58,19 +58,20 @@ cd backend; .venv\Scripts\python -m pytest -q
 ```powershell
 cd frontend; npm test
 ```
-There are 60 backend tests (AQI breakpoints, risk engine, calculators, every API endpoint, validation, rate limiting, privacy rounding, upload checks) and 7 frontend tests (i18n completeness, formatting).
+There are 61 backend tests (AQI breakpoints, risk engine, calculators, every API endpoint, validation, rate limiting, privacy rounding, upload checks) and 7 frontend tests (i18n completeness, formatting).
 
-## Deploy for free on Render (no credit card)
+## Deploy on Vercel (free Hobby plan)
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/shivangsaxena1011/breathewise-ai)
+FastAPI runs as a Vercel Python serverless function (`api/index.py`) and the React build is served as static files. `vercel.json` routes `/api/*` to FastAPI.
 
-1. Sign in at https://render.com with GitHub.
-2. Click **New → Blueprint** and pick this repo. Render reads `render.yaml` and builds the `Dockerfile` on the free plan.
-3. When asked, paste your `GEMINI_API_KEY` (from https://aistudio.google.com/apikey). It's optional, because the app works without it in rule-based mode.
+```powershell
+npx vercel --prod
+```
+Or import the GitHub repo at https://vercel.com/new. Then add your Gemini key under **Project → Settings → Environment Variables** as `GEMINI_API_KEY`, and redeploy. The key is optional: without it the app runs in rule-based mode.
 
-Free instances sleep after about 15 minutes idle, so the first visit after that takes ~30–60 s.
+On Vercel, community reports are kept in SQLite under `/tmp`, so they can reset when a function instance restarts. Connect a database (for example Vercel Postgres or Neon) for permanent storage.
 
-## Deploy to Google Cloud Run (needs a billing account)
+## Alternative: Google Cloud Run (Docker, needs a billing account)
 
 ```powershell
 gcloud run deploy breathewise --source . --region asia-south1 --allow-unauthenticated --set-env-vars GEMINI_API_KEY=YOUR_KEY

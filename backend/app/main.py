@@ -32,15 +32,27 @@ ai_limiter = RateLimiter(settings.ai_rate_limit_per_minute)
 AI_PATHS = {"/api/chat", "/api/plan/family", "/api/reports/analyze", "/api/whatif"}
 
 
+def get_http(app: FastAPI) -> httpx.AsyncClient:
+    """Shared HTTP client, created on first use (serverless platforms may skip lifespan events)."""
+    if getattr(app.state, "http", None) is None:
+        app.state.http = httpx.AsyncClient(headers={"User-Agent": "BreatheWise/1.0"})
+    return app.state.http
+
+
+def get_store(app: FastAPI) -> ReportStore:
+    if getattr(app.state, "store", None) is None:
+        app.state.store = ReportStore(settings.database_path)
+    return app.state.store
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not hasattr(app.state, "http"):
-        app.state.http = httpx.AsyncClient(headers={"User-Agent": "BreatheWise/1.0"})
-    if not hasattr(app.state, "store"):
-        app.state.store = ReportStore(settings.database_path)
+    get_http(app)
+    get_store(app)
     log.info("AI mode: %s", "Gemini " + settings.gemini_model if settings.ai_enabled else "rules only (no GEMINI_API_KEY)")
     yield
     await app.state.http.aclose()
+    app.state.http = None
 
 
 app = FastAPI(title="BreatheWise AI", version="1.0.0", lifespan=lifespan,
@@ -78,7 +90,7 @@ async def guard(request: Request, call_next):
 
 async def snapshot_or_502(request: Request, lat: float, lon: float) -> dict[str, Any]:
     try:
-        return await air_quality.get_snapshot(request.app.state.http, lat, lon)
+        return await air_quality.get_snapshot(get_http(request.app), lat, lon)
     except air_quality.UpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -92,7 +104,7 @@ async def health() -> dict[str, Any]:
 @app.get("/api/geocode")
 async def geocode(request: Request, q: str = Query(min_length=2, max_length=80), lang: Lang = "en"):
     try:
-        return {"results": await air_quality.geocode(request.app.state.http, q, lang)}
+        return {"results": await air_quality.geocode(get_http(request.app), q, lang)}
     except air_quality.UpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -105,7 +117,7 @@ async def air(request: Request, lat: float = Query(ge=-90, le=90), lon: float = 
 @app.get("/api/air/grid")
 async def air_grid(request: Request, lat: float = Query(ge=-90, le=90), lon: float = Query(ge=-180, le=180)):
     try:
-        return await air_quality.get_area_grid(request.app.state.http, lat, lon)
+        return await air_quality.get_area_grid(get_http(request.app), lat, lon)
     except air_quality.UpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -171,7 +183,7 @@ async def chat(req: ChatRequest, request: Request):
     snap = None
     if req.lat is not None and req.lon is not None:
         try:
-            snap = await air_quality.get_snapshot(request.app.state.http, req.lat, req.lon)
+            snap = await air_quality.get_snapshot(get_http(request.app), req.lat, req.lon)
         except air_quality.UpstreamError:
             snap = None  # still answer, but without numbers
     history = [m.model_dump() for m in req.history]
@@ -181,20 +193,20 @@ async def chat(req: ChatRequest, request: Request):
 # ----------------------------------------------------------------------------- community
 @app.get("/api/reports")
 async def list_reports(request: Request, lat: float = Query(ge=-90, le=90), lon: float = Query(ge=-180, le=180)):
-    return {"reports": request.app.state.store.nearby(lat, lon)}
+    return {"reports": get_store(request.app).nearby(lat, lon)}
 
 
 @app.post("/api/reports", status_code=201)
 async def create_report(report: ReportCreate, request: Request):
     try:
-        return request.app.state.store.add(report)
+        return get_store(request.app).add(report)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/reports/{report_id}/confirm")
 async def confirm_report(report_id: int, request: Request):
-    result = request.app.state.store.confirm(report_id)
+    result = get_store(request.app).confirm(report_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return result
