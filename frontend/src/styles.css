@@ -256,3 +256,65 @@ main:focus { outline: none; }
 @keyframes pulse-dot { 50% { transform: scale(.6); opacity: .5; } }
 .station { margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: var(--card-solid);
   border: 1px solid var(--border); font-size: .88rem; animation: rise-in .5s .2s both; }
+
+/* ---------- mobile ---------- */
+/* Comfortable touch targets (≥40px) on touch screens */
+@media (pointer: coarse) {
+  .chip { padding: 9px 14px; min-height: 40px; }
+  .btn.small { min-height: 40px; padding: 9px 14px; }
+  .check input { width: 22px; height: 22px; }
+  input[type="range"] { height: 32px; }
+  nav.tabs button { min-height: 44px; }
+}
+/* Keep floating controls clear of the iPhone home bar / notch */
+.fab { bottom: calc(20px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right)); }
+.chat { bottom: calc(94px + env(safe-area-inset-bottom)); }
+@media (max-width: 520px) {
+  .shell { padding-left: 12px; padding-right: 12px; }
+  .card { padding: 16px; border-radius: 18px; }
+  .brand h1 { font-size: 1.15rem; }
+  .brand small { display: none; }
+  .hero { gap: 12px; }
+  .ring { width: 160px; height: 160px; }
+  .ring svg { width: 160px; height: 160px; }
+  .ring .num { font-size: 2.6rem; }
+  .hero h2 { font-size: 1.5rem; }
+  .page-head h2 { font-size: 1.35rem; }
+  .pollutants { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .pollutants div { padding: 8px 4px; }
+  .windows .win .t { font-size: 1.15rem; }
+  .stat b { font-size: 1.35rem; }
+  .row > .stat { min-width: 0; }
+  .bars { height: 110px; gap: 2px; }
+  .chat { right: 8px; left: 8px; width: auto; height: calc(100dvh - 110px - env(safe-area-inset-bottom)); }
+  .station { font-size: .82rem; }
+}
+
+/* Phones: app-style bottom navigation with all five sections visible */
+@media (max-width: 640px) {
+  nav.tabs {
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--card-solid) 88%, transparent);
+    border-top: 1px solid var(--border); box-shadow: 0 -8px 24px -16px rgba(0, 0, 0, .35);
+    overflow: visible;
+  }
+  nav.tabs button {
+    flex-direction: column; gap: 2px; padding: 6px 2px; min-height: 52px; border: 0; border-radius: 14px;
+    background: transparent; font-size: .68rem; line-height: 1.15; text-align: center; white-space: normal;
+    box-shadow: none;
+  }
+  nav.tabs button span[aria-hidden="true"] { font-size: 1.3rem; }
+  nav.tabs button[aria-selected="true"] { box-shadow: none; }
+  nav.tabs button:hover { transform: none; }
+  .shell { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .fab { bottom: calc(84px + env(safe-area-inset-bottom)); width: 56px; height: 56px; }
+  .chat { bottom: calc(150px + env(safe-area-inset-bottom)); height: calc(100dvh - 200px - env(safe-area-inset-bottom)); }
+}
+
+/* File picker: a full-size, easy-to-tap control */
+input[type="file"] { width: 100%; min-height: 44px; padding: 8px; border-radius: 12px; border: 1.5px dashed var(--border);
+  background: var(--card-solid); cursor: pointer; font-size: .9rem; }
+input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px; border: 0; border-radius: 10px;
+  background: var(--brand); color: #fff; font-weight: 700; cursor: pointer; }

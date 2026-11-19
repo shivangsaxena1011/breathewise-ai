@@ -30,3 +30,21 @@ describe("chat Markdown", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 });
+
+describe("Today helpers", async () => {
+  const { usAqiText, cityTimeAhead } = await import("./pages/Today");
+
+  it("shows US AQI 0 as 0, and only missing values as a dash", () => {
+    expect(usAqiText(0)).toBe("0");
+    expect(usAqiText(152.6)).toBe("153");
+    expect(usAqiText(null)).toBe("—");
+    expect(usAqiText(Number.NaN)).toBe("—");
+  });
+
+  it("defaults the Guardian time from the city's own forecast clock", () => {
+    const hourly = Array.from({ length: 6 }, (_, i) => ({ time: `2026-11-19T${String(14 + i).padStart(2, "0")}:00`, pm2_5: 1, pm10: 1, level: 0, us_aqi: 1 }));
+    const snap = { hourly, now_index: 1 } as never;
+    expect(cityTimeAhead(snap, 3)).toBe("2026-11-19T18:00");
+    expect(cityTimeAhead(snap, 99)).toBe("2026-11-19T19:00"); // clamps to the last forecast hour
+  });
+});

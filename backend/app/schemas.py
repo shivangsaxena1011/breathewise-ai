@@ -128,6 +128,7 @@ class Activity(BaseModel):
 class AlertsRequest(Coords):
     activities: list[Activity] = Field(default_factory=list, max_length=20)
     household: Household | None = None
+    lang: Lang = "en"
 
 
 class RoutineRequest(Coords):

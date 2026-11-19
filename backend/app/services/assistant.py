@@ -38,8 +38,11 @@ def context_block(snapshot: dict[str, Any] | None, place: str | None, household:
             lines.append("- Weather drivers: " + "; ".join(d["text"] for d in snapshot["smog_drivers"]))
         st = snapshot.get("station")
         if st:
+            measured = [f"US AQI {st['us_aqi']:.0f}"]
+            measured += [f"{label} ≈ {st[key]:.0f} µg/m³" for key, label in (("pm25", "PM2.5"), ("pm10", "PM10"))
+                         if st.get(key) is not None]
             lines.append(f"- Measured at a monitoring station {st['distance_km']} km away at {st['measured_at'][11:16]}: "
-                         f"US AQI {st['us_aqi']:.0f}, PM2.5 ≈ {st['pm25']} µg/m³")
+                         + ", ".join(measured))
             lines.append("- AQI and forecast above are a model calibrated to that station reading")
         else:
             lines.append("- Source: atmospheric-model estimate (no nearby station reading)")

@@ -83,8 +83,8 @@ export const api = {
     commute_mode: household.members.find((m) => m.commute_mode)?.commute_mode ?? null }),
   indoor: (p: Place, home: Home, rooms: { kind: string; area_m2: number }[], lang: Lang) =>
     post<any>("/api/indoor", { lat: p.lat, lon: p.lon, home, rooms, lang }),
-  alerts: (p: Place, activities: unknown[], household: Household) =>
-    post<any>("/api/alerts", { lat: p.lat, lon: p.lon, activities, household }),
+  alerts: (p: Place, activities: unknown[], household: Household, lang: Lang) =>
+    post<any>("/api/alerts", { lat: p.lat, lon: p.lon, activities, household, lang }),
   mobility: (distance_km: number, occupants: number) => post<any>("/api/mobility", { distance_km, occupants }),
   whatIf: (body: unknown) => post<any>("/api/whatif", body),
   chat: (body: unknown) => post<{ reply: string; mode: "ai" | "rules" }>("/api/chat", body),

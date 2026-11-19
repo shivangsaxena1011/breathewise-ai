@@ -38,7 +38,8 @@ def exercise_shift(snapshot: dict[str, Any], current_hour: int, duration_min: in
         v = _avg_pm25(hourly, i, duration_min)
         return float("inf") if v is None else v
 
-    best_idx = min(candidates, key=avg_or_inf)
+    # The usual hour is always a candidate, so the suggestion is never worse than doing nothing.
+    best_idx = min([usual_idx, *candidates], key=avg_or_inf)
     usual_pm = _avg_pm25(hourly, usual_idx, duration_min)
     best_pm = _avg_pm25(hourly, best_idx, duration_min)
     if usual_pm is None or best_pm is None:

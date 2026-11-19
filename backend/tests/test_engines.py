@@ -167,3 +167,47 @@ def test_rate_limiter_evicts_oldest_not_everyone():
     rl.allow("b")
     rl.allow("c")  # evicts "a" only
     assert not rl.allow("b")
+
+
+def test_exercise_shift_never_suggests_a_dirtier_time():
+    # Night (22:00) is the cleanest; daytime is dirtier, so the usual time must win.
+    curve = [20.0 if (h % 24) >= 21 or (h % 24) < 5 else 150.0 for h in range(96)]
+    s = build_snapshot(make_air_payload(curve), None)
+    r = exposure.exercise_shift(s, current_hour=22, duration_min=60, intensity="moderate")
+    assert r["available"] and r["dose_reduction_pct"] == 0
+    assert r["best"]["time"] == r["usual"]["time"]
+
+
+def test_window_can_cover_20_to_21():
+    curve = [5.0 if (h % 24) in (20, 21) else 100.0 for h in range(96)]
+    w = build_snapshot(make_air_payload(curve), None)["windows"][0]
+    assert w["best"]["start"].endswith("T20:00")
+
+
+def test_rule_text_is_translated_to_hindi(snap):
+    hh = Household(members=[Member(name="Dadi", age_group="elderly", conditions=["asthma"]),
+                            Member(name="Riya", age_group="child")])
+    plan = risk.build_plan(hh, snap, "hi")
+    texts = [a["text"] for m in plan["members"] for a in m["actions"]] + [a["text"] for a in plan["household_actions"]]
+    assert texts and all(any("ऀ" <= ch <= "ॿ" for ch in t) for t in texts)  # every line has Devanagari
+    steps = planner.routine(hh, snap, None, "hi")["steps"]
+    assert all(any("ऀ" <= ch <= "ॿ" for ch in s["detail"]) for s in steps)
+    vent = indoor.diagnose(Home(), [Room(kind="kitchen")], snap, "hi")
+    assert "खिड़कियाँ" in vent["ventilation"]["text"]
+    alert = planner.alerts([Activity(title="सैर", start="2026-11-19T19:00", sensitive=True)], snap, None, "hi")
+    assert "सैर" in alert["alerts"][0]["message"] and "अनुमान" in alert["alerts"][0]["message"]
+
+
+def test_hindi_clock_times():
+    from app.services.i18n import fmt_hour
+    assert fmt_hour("2026-11-19T07:00", "hi") == "सुबह 7 बजे"
+    assert fmt_hour("2026-11-19T13:00", "hi") == "दोपहर 1 बजे"
+    assert fmt_hour("2026-11-19T19:00", "hi") == "शाम 7 बजे"
+    assert fmt_hour("2026-11-19T22:00", "hi") == "रात 10 बजे"
+    assert fmt_hour("2026-11-19T19:00") == "7 PM"
+
+
+def test_diabetes_raises_risk_on_poor_days():
+    base = risk.member_risk(Member(name="A"), 3)["score"]
+    assert risk.member_risk(Member(name="B", conditions=["diabetes"]), 3)["score"] == base + 1
+    assert risk.member_risk(Member(name="C", conditions=["diabetes"]), 1)["score"] == 1

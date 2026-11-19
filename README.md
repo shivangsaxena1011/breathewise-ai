@@ -13,7 +13,7 @@ A GenAI assistant that helps families and communities get through severe winter 
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.165-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-133%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-157%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/backend%20coverage-92%25-brightgreen)
 
 **[Live demo → breathewise-ai-tau.vercel.app](https://breathewise-ai-tau.vercel.app)**
@@ -75,7 +75,7 @@ BreatheWise turns live air-quality data and a short household profile into speci
 | **📣 Community Watch** | Neighbours report garbage burning, dust or smoke. **Gemini Vision** helps fill the report from a photo, and other people confirm reports. |
 | **💬 Ask BreatheWise** | A chat assistant with voice input and spoken replies. Every answer is grounded in the live data and the household profile. |
 
-It also has offline mode (the last reading is shown with its timestamp), dark mode, reduced-motion support and full keyboard use.
+It also has offline mode (the last reading is shown with its timestamp), dark mode, reduced-motion support and full keyboard use. On phones the five sections move to an app-style bottom navigation bar, with large touch targets and room for iPhone safe areas.
 
 ## How it works
 
@@ -140,7 +140,7 @@ The core principle is **compute first, then explain**. The model never invents d
 | **Code quality** | Clear layers: routes in `main.py`, pure engines in `services/`, prompts in `assistant.py`, and the AI client in `gemini.py`. Strict TypeScript and typed Pydantic models throughout. The Ruff linter passes with zero issues, and pure logic (`eco.ts`, `aqi.py`) is kept separate from the UI. |
 | **Security** | The Gemini key lives only on the server and never reaches the browser. Every input is validated with Pydantic bounds and enums. Requests are rate-limited per IP (stricter for AI endpoints), using headers that can't be forged on Vercel. Uploads are checked by file signature and capped at 4 MB, and photos are never stored. Responses carry CSP, `X-Frame-Options`, `nosniff` and a referrer policy. SQL is parameterised. The UI never injects HTML, and the chat Markdown renderer is tested against XSS. Report locations are rounded to about 100 m, and community reports reject links. |
 | **Efficiency** | A 10-minute in-memory cache for each location and a shared HTTP client. Area-grid points are fetched in one batch request. Pages are lazy-loaded (about 80 KB gzipped for the main bundle). Charts and animations are plain CSS and SVG with no chart library, and hashed assets are cached for a year. Gzip is on, and the serverless function starts cold without any startup step. |
-| **Testing** | **133 automated tests.** 112 backend tests (pytest, 92%+ coverage) cover AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing, station parsing and calibration, and the Vercel entry point. 21 frontend tests (Vitest) cover tracker and streak logic, timezone-safe dates, error messages, i18n completeness and XSS-safe Markdown. GitHub Actions runs the linter, tests, type check and build on every push. |
+| **Testing** | **157 automated tests.** 134 backend tests (pytest, 92%+ coverage) cover AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing, chat-history normalisation, station parsing and calibration, the Redis report store (against a fake Upstash server), Hindi rule text, and the Vercel entry point. 23 frontend tests (Vitest) cover tracker and streak logic, timezone-safe dates, error messages, i18n completeness, XSS-safe Markdown, and city-clock and AQI display helpers. GitHub Actions runs the linter, tests, type check and build on every push. |
 | **Accessibility** | Semantic tabs with arrow-key navigation, a skip-to-content control, and labelled inputs. The AQI is shown as a number and a word, never colour alone. Live regions announce results. The chat dialog returns focus when it closes. `prefers-reduced-motion` and dark mode are respected, and every screen works at phone width. The whole interface, voice included, is available in Hindi. |
 
 ## Data sources and attribution
@@ -156,14 +156,14 @@ The core principle is **compute first, then explain**. The model never invents d
 - **Emission factors** are typical Indian-context values: petrol car 15 km/L, scooter 45 km/L, city bus 30 passengers, grid 0.72 kg CO₂/kWh, open waste burning about 8 g PM2.5 per kg. Each one is shown next to the result.
 - **Breathing rates** are typical adult values. Children breathe more air per kg of body weight, which the risk engine reflects qualitatively.
 - **Guidance** follows general public-health advice and is **not medical advice**. Serious symptoms always lead to "seek medical care".
-- **Privacy by design:** there are no accounts. The household profile and eco tracker stay in the browser, and only the anonymous community reports are stored on the server.
+- **Privacy by design:** there are no accounts. The household profile and eco tracker stay in the browser. Only the anonymous community reports are stored on the server, and confirmations are keyed by a salted hash of the visitor's IP, never the IP itself. Reports expire after 30 days.
 
 ## Tech stack and project structure
 
 | Layer | Technology |
 | --- | --- |
 | Frontend | React 19, TypeScript (strict), Vite, hand-written CSS animations, Web Speech API, service worker |
-| Backend | Python 3.12+, FastAPI, Pydantic v2, httpx (async), SQLite |
+| Backend | Python 3.12+, FastAPI, Pydantic v2, httpx (async), SQLite or Upstash Redis |
 | AI | Google Gemini through the `google-genai` SDK (text, JSON schema, vision) |
 | Data | Open-Meteo Air Quality (CAMS), Forecast and Geocoding APIs; World Air Quality Index (WAQI) station feed (relays CPCB stations) |
 | Quality | pytest + pytest-cov, Vitest, Ruff, GitHub Actions |
@@ -185,10 +185,11 @@ The core principle is **compute first, then explain**. The model never invents d
 │   │       ├── emissions.py  # travel / energy / burning estimates
 │   │       ├── exposure.py   # inhaled-dose What-If
 │   │       ├── planner.py    # Guardian alerts, daily routine
-│   │       ├── community.py  # SQLite community reports
+│   │       ├── community.py  # community reports: SQLite locally, Upstash Redis when hosted
 │   │       ├── assistant.py  # prompts, grounding, rule-based fallback
+│   │       ├── i18n.py       # English / Hindi text for rule-based output
 │   │       └── gemini.py     # Gemini client with model fallback
-│   └── tests/                # 112 pytest tests
+│   └── tests/                # 134 pytest tests
 ├── frontend/
 │   ├── public/               # logo, manifest, service worker
 │   └── src/
@@ -196,7 +197,7 @@ The core principle is **compute first, then explain**. The model never invents d
 │       ├── Chat.tsx          # assistant with voice
 │       ├── eco.ts            # tracker / streak / challenge logic (pure)
 │       ├── i18n.ts           # English + Hindi strings
-│       └── *.test.ts(x)      # 21 Vitest tests
+│       └── *.test.ts(x)      # 23 Vitest tests
 ├── vercel.json               # build, routing, security headers
 ├── BLOG.md                   # technical blog (problem, prompt strategy, solution)
 └── .github/workflows/ci.yml  # lint + tests + build on every push
@@ -229,14 +230,13 @@ cd backend; .venv\Scripts\python -m ruff check app tests ..\api; .venv\Scripts\p
 cd frontend; npx tsc --noEmit; npm test
 ```
 
-**Configuration** (environment variables, see [.env.example](.env.example)): `GEMINI_API_KEY`, `WAQI_TOKEN` (free, for live station data), `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `AI_RATE_LIMIT_PER_MINUTE`, `AIR_CACHE_SECONDS`.
+**Configuration** (environment variables, see [.env.example](.env.example)): `GEMINI_API_KEY`, `WAQI_TOKEN` (free, for live station data), `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Upstash Redis, for persistent reports; set automatically by Vercel's Upstash integration), `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `AI_RATE_LIMIT_PER_MINUTE`, `AIR_CACHE_SECONDS`.
 
 **Deployment:** the app is deployed on **Vercel**. `vercel.json` builds the React app as static files and runs FastAPI as a Python serverless function (`api/index.py`) for every `/api/*` route. The Gemini key is set as a Vercel environment variable. A `Dockerfile` is also included for container platforms such as Google Cloud Run.
 
 ## Limitations and roadmap
 
-- **Persistence:** on Vercel, community reports are stored in temporary function storage and can reset when an instance restarts. The next step is a hosted database (for example Postgres or Firestore).
-- **Rule-based text in Hindi:** the AI responses and the interface are bilingual, but some rule-based action text from the backend is still English-only. Translating it is planned.
+- **Persistence:** community reports are permanent and shared across serverless instances when Upstash Redis is connected. Without it they live in per-instance SQLite, which suits local runs.
 - **Data:** the next step is to combine several nearby stations (inverse-distance weighting) and add a station map layer.
 - **Planned features:** push notifications for the Guardian, more Indian languages, and school and neighbourhood dashboards.
 
@@ -246,6 +246,6 @@ cd frontend; npx tsc --noEmit; npm test
 
 **We don't just tell people how polluted their city is. We help them decide what to do next.**
 
-Built for PromptWars Virtual, Challenge 6. *General guidance, not medical advice.*
+Built for PromptWars Virtual, Challenge 6 by **[Shivang Saxena](https://github.com/shivangsaxena1011)**. *General guidance, not medical advice.*
 
 </div>

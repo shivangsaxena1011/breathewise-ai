@@ -81,7 +81,13 @@ export default function App() {
           </Suspense>
           </ErrorBoundary>
         </main>
-        <footer className="foot">{t("disclaimer")}<br />© {new Date().getFullYear()} BreatheWise AI</footer>
+        <footer className="foot">
+          {t("disclaimer")}<br />
+          © {new Date().getFullYear()} BreatheWise AI · {tx("Developed by", "विकासक:")}{" "}
+          <a href="https://github.com/shivangsaxena1011" target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
+            Shivang Saxena
+          </a>
+        </footer>
       </div>
       <Chat />
     </>

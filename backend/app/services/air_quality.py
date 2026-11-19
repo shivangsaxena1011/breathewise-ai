@@ -114,7 +114,8 @@ def _smog_drivers(weather_now: dict[str, Any]) -> list[dict[str, str]]:
 
 def _window(hours: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
     """Cleanest and dirtiest consecutive 2-hour daytime (6:00–21:00) windows within `hours`."""
-    day = [h for h in hours if h["pm2_5"] is not None and 6 <= int(h["time"][11:13]) <= 20]
+    # A window starts between 06:00 and 20:00 and covers that hour plus the next one (so it ends by 21:00).
+    day = [h for h in hours if h["pm2_5"] is not None and 6 <= int(h["time"][11:13]) <= 21]
     pairs = [(a, b) for a, b in zip(day, day[1:], strict=False) if b["time"][:10] == a["time"][:10]
              and int(b["time"][11:13]) == int(a["time"][11:13]) + 1]
     if not pairs:

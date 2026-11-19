@@ -121,3 +121,39 @@ def test_photo_endpoint_with_ai(client, fake):
     assert r.status_code == 200
     body = r.json()
     assert body["category"] == "waste_burning" and "cannot measure air quality" in body["note"]
+
+
+@pytest.mark.parametrize("history,expected", [
+    ([], []),
+    ([{"role": "assistant", "content": "welcome"}], []),                                   # can't start with model
+    ([{"role": "user", "content": "a"}, {"role": "user", "content": "b"},                  # consecutive users merge
+      {"role": "assistant", "content": "c"}], [("user", "a\n\nb"), ("model", "c")]),
+    ([{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"},
+      {"role": "user", "content": "unanswered"}], [("user", "q1"), ("model", "a1")]),     # ends on model
+    ([{"role": "user", "content": "  "}, {"role": "user", "content": "x"},
+      {"role": "assistant", "content": "y"}], [("user", "x"), ("model", "y")]),            # blanks dropped
+])
+def test_history_always_alternates(history, expected):
+    turns = gemini.normalise_history(history)
+    assert turns == expected
+    assert all(turns[i][0] != turns[i + 1][0] for i in range(len(turns) - 1))
+
+
+def test_network_error_without_status_tries_next_model(fake):
+    models = fake({PRIMARY: TimeoutError("read timed out"), FALLBACK: "from fallback"})
+    assert run(gemini.generate_text("sys", "hi")) == "from fallback"
+    assert [c["model"] for c in models.calls] == [PRIMARY, FALLBACK]
+
+
+@pytest.mark.parametrize("code", [502, 504])
+def test_gateway_errors_try_next_model(fake, code):
+    fake({PRIMARY: FakeError(code), FALLBACK: "ok"})
+    assert run(gemini.generate_text("sys", "hi")) == "ok"
+
+
+def test_station_without_pm25_never_puts_none_in_context():
+    snap = build_snapshot(make_air_payload(), None)
+    snap["station"] = {"distance_km": 3.2, "measured_at": "2026-11-19T15:00:00+05:30", "us_aqi": 160.0,
+                       "pm25": None, "pm10": 140.0}
+    ctx = assistant.context_block(snap, "Delhi", None)
+    assert "None" not in ctx and "PM10 ≈ 140" in ctx

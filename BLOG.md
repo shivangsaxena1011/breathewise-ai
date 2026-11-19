@@ -1,6 +1,7 @@
 # Building BreatheWise AI: a smog survival assistant, built with prompts
 
-*PromptWars Virtual, Challenge 6: Urban Air Quality Assistant*
+*PromptWars Virtual, Challenge 6: Urban Air Quality Assistant*  
+*Developed by [Shivang Saxena](https://github.com/shivangsaxena1011)*
 
 ## The problem
 

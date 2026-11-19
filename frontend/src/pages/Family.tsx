@@ -6,7 +6,7 @@ import { useApp } from "../store";
 const AGES: [AgeGroup, string, string][] = [["infant", "👶 Infant", "👶 शिशु"], ["child", "🧒 Child", "🧒 बच्चा"],
   ["teen", "🧑 Teen", "🧑 किशोर"], ["adult", "🧑‍💼 Adult", "🧑‍💼 वयस्क"], ["elderly", "👵 Elderly", "👵 बुज़ुर्ग"]];
 const CONDITIONS: [Condition, string, string][] = [["asthma", "Asthma", "अस्थमा"], ["copd", "COPD", "COPD"],
-  ["heart", "Heart", "हृदय रोग"], ["pregnant", "Pregnant", "गर्भवती"], ["allergy", "Allergy", "एलर्जी"]];
+  ["heart", "Heart", "हृदय रोग"], ["pregnant", "Pregnant", "गर्भवती"], ["allergy", "Allergy", "एलर्जी"], ["diabetes", "Diabetes", "डायबिटीज़"]];
 export const MODES: [Mode, string, string][] = [
   ["walk", "🚶 Walk", "🚶 पैदल"], ["cycle", "🚲 Cycle", "🚲 साइकिल"], ["metro", "🚇 Metro", "🚇 मेट्रो"], ["bus", "🚌 Bus", "🚌 बस"],
   ["auto_cng", "🛺 Auto (CNG)", "🛺 ऑटो (CNG)"], ["two_wheeler", "🛵 Scooter/bike", "🛵 स्कूटर/बाइक"],

@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
-import { api, fmtHour, LEVEL_COLORS, type Station } from "../api";
+import { api, fmtHour, LEVEL_COLORS, type Snapshot, type Station } from "../api";
 import { AqiRing, aqiLabel, Btn, Card, CitySearch, ForecastBars, NumInput } from "../components";
 import { AQI_HEALTH_HI } from "../i18n";
 import { useApp } from "../store";
 
-function localInput(offsetHours: number) {
-  const d = new Date(Date.now() + offsetHours * 3600_000);
-  d.setMinutes(0, 0, 0);
+/** A start time a few hours ahead, in the selected city's own clock (forecast hours are city-local). */
+/** 0 is clean air, not "missing": only null/undefined/NaN show a dash. */
+export function usAqiText(v: number | null | undefined): string {
+  return v == null || Number.isNaN(v) ? "—" : String(Math.round(v));
+}
+
+export function cityTimeAhead(snap: Snapshot | null, hoursAhead: number): string {
+  const h = snap?.hourly[Math.min((snap?.now_index ?? 0) + hoursAhead, (snap?.hourly.length ?? 1) - 1)];
+  if (h) return h.time.slice(0, 16);
+  const d = new Date(Date.now() + hoursAhead * 3600_000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
@@ -25,6 +32,14 @@ function notify(body: string) {
 }
 
 /** Live monitoring-station reading. Attribution to the data sources is required by the station data terms. */
+function driverHi(key: string, snap: Snapshot): string | null {
+  const w = snap.weather_now;
+  if (key === "low_wind") return `हवा बहुत धीमी है (${Math.round(w.wind_speed_10m ?? 0)} किमी/घंटा) — प्रदूषण दूर नहीं जा रहा।`;
+  if (key === "low_mixing") return `हवा की ऊपर-नीचे मिलने वाली परत बहुत नीची है (~${Math.round(w.boundary_layer_height ?? 0)} मीटर) — धुआँ और धूल ज़मीन के पास फँसे हैं।`;
+  if (key === "fog") return "ठंडी, नम हवा — कोहरा धुएँ के साथ मिलकर घना स्मॉग बना सकता है।";
+  return null;
+}
+
 function StationLine({ st, timeZone }: { st: Station; timeZone: string }) {
   const { t } = useApp();
   // Show the city's own clock time, not the viewer's.
@@ -54,9 +69,12 @@ function StationLine({ st, timeZone }: { st: Station; timeZone: string }) {
 }
 
 function Guardian() {
-  const { t, tx, place, household } = useApp();
+  const { t, tx, lang, place, household, snap } = useApp();
   const [title, setTitle] = useState(() => tx("Evening walk", "शाम की सैर"));
-  const [start, setStart] = useState(() => localInput(3));
+  const [start, setStart] = useState(() => cityTimeAhead(snap, 3));
+  const [edited, setEdited] = useState(false);
+  // When the city (and so its clock) changes, move the default time unless the user picked one.
+  useEffect(() => { if (!edited) setStart(cityTimeAhead(snap, 3)); }, [snap, edited]);
   const [mins, setMins] = useState(45);
   const [sensitive, setSensitive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -67,7 +85,7 @@ function Guardian() {
     if (!place) return;
     setBusy(true); setErr(null);
     try {
-      const r = await api.alerts(place, [{ title, start, duration_min: mins, sensitive }], household);
+      const r = await api.alerts(place, [{ title, start, duration_min: mins, sensitive }], household, lang);
       setRes(r.alerts);
       const a = r.alerts[0];
       if (a?.status === "warn") notify(a.message);
@@ -80,7 +98,8 @@ function Guardian() {
       <div className="stack">
         <label className="field">{t("activity")}<input type="text" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} /></label>
         <div className="row">
-          <label className="field" style={{ flex: 2 }}>{t("when")}<input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+          <label className="field" style={{ flex: 2 }}>{t("when")} {snap && <span className="muted">({snap.location.timezone})</span>}
+            <input type="datetime-local" value={start} onChange={(e) => { setStart(e.target.value); setEdited(true); }} /></label>
           <label className="field" style={{ flex: 1 }}>{t("minutes")}<NumInput min={5} max={720} value={mins} onChange={setMins} /></label>
         </div>
         <label className="check"><input type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />{t("sensitive")}</label>
@@ -181,7 +200,7 @@ export default function Today() {
               <h2>📍 {place.name}</h2>
               <p style={{ margin: "4px 0 10px" }}>{lang === "hi" && snap.aqi.category ? AQI_HEALTH_HI[snap.aqi.category] ?? snap.aqi.health : snap.aqi.health}</p>
               <div className="small muted">
-                {t("dominant")}: <b>{snap.aqi.dominant ?? "—"}</b> · US AQI {Math.round(snap.station?.us_aqi ?? snap.aqi.us_aqi ?? NaN) || "—"} · {t("updated")} {fmtHour(snap.observed_at)}
+                {t("dominant")}: <b>{snap.aqi.dominant ?? "—"}</b> · US AQI {usAqiText(snap.station?.us_aqi ?? snap.aqi.us_aqi)} · {t("updated")} {fmtHour(snap.observed_at)}
                 {" "}({snap.location.timezone})
               </div>
               {snap.station && <StationLine st={snap.station} timeZone={snap.location.timezone} />}
@@ -216,7 +235,7 @@ export default function Today() {
             {snap.smog_drivers.length > 0 && (
               <>
                 <h3 style={{ marginTop: 16 }}><span aria-hidden="true">🌡️</span>{t("why_smog")}</h3>
-                <ul className="small" style={{ paddingLeft: 18, margin: 0 }}>{snap.smog_drivers.map((d) => <li key={d.key}>{d.text}</li>)}</ul>
+                <ul className="small" style={{ paddingLeft: 18, margin: 0 }}>{snap.smog_drivers.map((d) => <li key={d.key}>{lang === "hi" ? driverHi(d.key, snap) ?? d.text : d.text}</li>)}</ul>
               </>
             )}
           </Card>

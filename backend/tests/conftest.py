@@ -64,7 +64,7 @@ def client_factory():
 
     from app import main
     from app.services import air_quality
-    from app.services.community import ReportStore
+    from app.services.community import SQLiteReportStore
 
     clients = []
 
@@ -72,9 +72,8 @@ def client_factory():
         air_quality.clear_cache()
         main.general_limiter.reset()
         main.ai_limiter.reset()
-        main._confirmed.clear()
         main.app.state.http = httpx.AsyncClient(transport=mock_transport(fail_air))
-        main.app.state.store = ReportStore(":memory:")
+        main.app.state.store = SQLiteReportStore(":memory:")
         c = TestClient(main.app)
         c.__enter__()
         clients.append(c)

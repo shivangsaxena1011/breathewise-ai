@@ -68,6 +68,7 @@ def _config(system: str, *, json_schema: dict[str, Any] | None = None, max_token
     return types.GenerateContentConfig(**kwargs)
 
 
+NON_RETRYABLE = {400, 401, 403}
 _preferred: str | None = None  # last model that answered, tried first next time
 
 
@@ -92,7 +93,9 @@ async def _generate(contents: Any, config: Any):
             return resp
         except Exception as exc:  # network, quota, safety block...
             log.warning("Gemini call failed on %s: %s", model, _describe(exc))
-            if getattr(exc, "code", None) not in (404, 429, 500, 503):
+            # Only errors caused by the request itself stop the loop; quota, missing models, server and
+            # gateway errors, and network failures (no status code) are worth trying on the next model.
+            if getattr(exc, "code", None) in NON_RETRYABLE:
                 return None
     return None
 
@@ -125,13 +128,30 @@ def image_part(data: bytes, mime_type: str):
     return types.Part.from_bytes(data=data, mime_type=mime_type)
 
 
+def normalise_history(history: list[dict[str, str]]) -> list[tuple[str, str]]:
+    """Gemini expects turns that alternate user → model, start with the user and (with the new
+    question appended) end on a model turn. Merge repeated roles and trim the edges."""
+    turns: list[tuple[str, str]] = []
+    for m in history:
+        role = "user" if m.get("role") == "user" else "model"
+        text = (m.get("content") or "").strip()
+        if not text:
+            continue
+        if turns and turns[-1][0] == role:
+            turns[-1] = (role, f"{turns[-1][1]}\n\n{text}")
+        else:
+            turns.append((role, text))
+    while turns and turns[0][0] != "user":
+        turns.pop(0)
+    if turns and turns[-1][0] == "user":
+        turns.pop()  # an unanswered question; the new one follows
+    return turns
+
+
 def history_contents(history: list[dict[str, str]], final_user_text: str):
     """Convert chat history into Gemini Content objects."""
     from google.genai import types
 
-    contents = [
-        types.Content(role="user" if m["role"] == "user" else "model", parts=[types.Part(text=m["content"])])
-        for m in history
-    ]
+    contents = [types.Content(role=role, parts=[types.Part(text=text)]) for role, text in normalise_history(history)]
     contents.append(types.Content(role="user", parts=[types.Part(text=final_user_text)]))
     return contents

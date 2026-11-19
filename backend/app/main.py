@@ -29,7 +29,7 @@ from .schemas import (
 )
 from .services import air_quality, assistant, emissions, exposure, gemini, indoor, planner, risk
 from .services.cache import RateLimiter
-from .services.community import ReportStore
+from .services.community import RedisReportStore, ReportStore, SQLiteReportStore, StoreError, voter_id
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("breathewise")
@@ -52,7 +52,10 @@ def get_http(app: FastAPI) -> httpx.AsyncClient:
 
 def get_store(app: FastAPI) -> ReportStore:
     if getattr(app.state, "store", None) is None:
-        app.state.store = ReportStore(settings.database_path)
+        if settings.redis_url and settings.redis_token:  # persistent, shared across serverless instances
+            app.state.store = RedisReportStore(settings.redis_url, settings.redis_token, get_http(app))
+        else:
+            app.state.store = SQLiteReportStore(settings.database_path)
     return app.state.store
 
 
@@ -73,7 +76,7 @@ app = FastAPI(title="BreatheWise AI", version="1.0.0", lifespan=lifespan,
               docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins,
-                   allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+                   allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Accept", "Accept-Language"])
 
 
 def client_ip(request: Request) -> str:
@@ -121,6 +124,7 @@ async def snapshot_or_502(request: Request, lat: float, lon: float) -> dict[str,
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     return {"status": "ok", "ai": gemini.enabled(), "stations": bool(settings.waqi_token),
+            "reports_storage": "redis" if settings.redis_url and settings.redis_token else "sqlite",
             "model": (gemini.active_model() or settings.gemini_model) if gemini.enabled() else None}
 
 
@@ -149,7 +153,7 @@ async def air_grid(request: Request, lat: float = Query(ge=-90, le=90), lon: flo
 @app.post("/api/plan/family")
 async def family_plan(req: PlanRequest, request: Request):
     snap = await snapshot_or_502(request, req.lat, req.lon)
-    plan = risk.build_plan(req.household, snap)
+    plan = risk.build_plan(req.household, snap, req.lang)
     plan["ai"] = await assistant.personalise_plan(plan, req.household, req.lang)
     return plan
 
@@ -157,20 +161,20 @@ async def family_plan(req: PlanRequest, request: Request):
 @app.post("/api/indoor")
 async def indoor_doctor(req: IndoorRequest, request: Request):
     snap = await snapshot_or_502(request, req.lat, req.lon)
-    return indoor.diagnose(req.home, req.rooms, snap)
+    return indoor.diagnose(req.home, req.rooms, snap, req.lang)
 
 
 @app.post("/api/routine")
 async def daily_routine(req: RoutineRequest, request: Request):
     snap = await snapshot_or_502(request, req.lat, req.lon)
     commute = req.commute_mode or next((m.commute_mode for m in req.household.members if m.commute_mode), None)
-    return planner.routine(req.household, snap, commute)
+    return planner.routine(req.household, snap, commute, req.lang)
 
 
 @app.post("/api/alerts")
 async def guardian_alerts(req: AlertsRequest, request: Request):
     snap = await snapshot_or_502(request, req.lat, req.lon)
-    return planner.alerts(req.activities, snap, req.household)
+    return planner.alerts(req.activities, snap, req.household, req.lang)
 
 
 @app.post("/api/mobility")
@@ -218,36 +222,28 @@ async def chat(req: ChatRequest, request: Request):
 
 
 # ----------------------------------------------------------------------------- community
+@app.exception_handler(StoreError)
+async def store_unavailable(request: Request, exc: StoreError):
+    return JSONResponse({"detail": "Community reports are temporarily unavailable. Please try again."}, status_code=503)
+
+
 @app.get("/api/reports")
 async def list_reports(request: Request, lat: float = Query(ge=-90, le=90), lon: float = Query(ge=-180, le=180)):
-    return {"reports": get_store(request.app).nearby(lat, lon)}
+    return {"reports": await get_store(request.app).nearby(lat, lon)}
 
 
 @app.post("/api/reports", status_code=201)
 async def create_report(report: ReportCreate, request: Request):
     try:
-        return get_store(request.app).add(report)
+        return await get_store(request.app).add(report)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-_confirmed: set[tuple[str, int]] = set()
-
-
 @app.post("/api/reports/{report_id}/confirm")
 async def confirm_report(report_id: int, request: Request):
-    store = get_store(request.app)
-    key = (client_ip(request), report_id)
-    if key in _confirmed:  # one confirmation per person per report
-        result = store.get(report_id)
-        if result is None:
-            raise HTTPException(status_code=404, detail="Report not found")
-        return result
-    result = store.confirm(report_id)
-    if result is not None:
-        if len(_confirmed) > 50_000:
-            _confirmed.clear()
-        _confirmed.add(key)
+    # One confirmation per person per report, remembered in the store (a salted IP hash, never the IP).
+    result = await get_store(request.app).confirm(report_id, voter_id(client_ip(request), settings.voter_salt))
     if result is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return result
