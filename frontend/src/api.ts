@@ -23,7 +23,7 @@ export interface Window { date: string; best: { start: string; pm2_5: number; le
 export interface Source { name: string; url: string; kind: string; note: string }
 export interface Aqi {
   value: number | null; scale: string; label: string; category: string | null; level: number | null; color: string; health: string;
-  dominant: string | null; sub_indices: Record<string, number>; us_aqi: number | null;
+  dominant: string | null; sub_indices: Record<string, number>; us_aqi: number | null; basis?: "model" | "station_calibrated";
 }
 export interface Snapshot {
   observed_at: string; fetched_at: string; aqi: Aqi;
@@ -31,6 +31,13 @@ export interface Snapshot {
   weather_now: Record<string, number | null>; smog_drivers: { key: string; text: string }[];
   hourly: Hour[]; now_index: number; windows: Window[]; source: Source;
   location: { lat: number; lon: number; timezone: string };
+  station: Station | null;
+}
+export interface Station {
+  name: string; distance_km: number; measured_at: string; age_minutes: number;
+  us_aqi: number; pm25: number | null; pm10: number | null; dominant: string | null;
+  attributions: { name: string; url: string }[];
+  calibration: { pm2_5: number | null; pm10: number | null };
 }
 export interface Action { text: string; why: string; priority: "high" | "medium" | "low" }
 

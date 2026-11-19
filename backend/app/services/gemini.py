@@ -20,7 +20,8 @@ LANG_NAMES = {"en": "English", "hi": "Hindi (Devanagari script; keep common Engl
 GROUNDING_RULES = """\
 Rules you must follow:
 - Use ONLY the air-quality numbers given in CONTEXT. Never invent AQI values, readings, forecasts or statistics.
-- The data is an atmospheric-model estimate, not a ground-station reading. Say so if the user asks about accuracy.
+- The data is an atmospheric-model estimate; when CONTEXT includes a station reading, the model has been
+  calibrated to that measurement. Explain this if the user asks about accuracy.
   Do not name data providers or APIs.
 - You give general wellbeing guidance, not medical diagnosis. For symptoms like chest pain, severe breathlessness
   or wheezing that does not settle, tell the user to seek medical care promptly.

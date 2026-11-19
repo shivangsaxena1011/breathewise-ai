@@ -15,6 +15,7 @@ import httpx
 
 from ..config import settings
 from . import aqi as aqi_math
+from . import stations
 from .cache import TTLCache
 
 AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
@@ -193,7 +194,8 @@ def build_snapshot(air: dict[str, Any], weather: dict[str, Any] | None) -> dict[
                    ("temperature_2m", "relative_humidity_2m", "wind_speed_10m", "boundary_layer_height")}
 
     return {
-        "location": {"lat": air.get("latitude"), "lon": air.get("longitude"), "timezone": air.get("timezone")},
+        "location": {"lat": air.get("latitude"), "lon": air.get("longitude"), "timezone": air.get("timezone"),
+                     "utc_offset_seconds": air.get("utc_offset_seconds") or 0},
         "observed_at": now_time,
         "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "aqi": {
@@ -207,6 +209,7 @@ def build_snapshot(air: dict[str, Any], weather: dict[str, Any] | None) -> dict[
             "dominant": aqi_math.POLLUTANT_LABELS.get(dominant or "", None),
             "sub_indices": {aqi_math.POLLUTANT_LABELS[k]: v for k, v in subs.items()},
             "us_aqi": current.get("us_aqi"),
+            "basis": "model",
         },
         "pollutants_now": {
             aqi_math.POLLUTANT_LABELS[p]: (
@@ -245,6 +248,9 @@ async def get_snapshot(client: httpx.AsyncClient, lat: float, lon: float) -> dic
     except UpstreamError:
         weather = None  # air data alone is still useful
     snapshot = build_snapshot(air, weather)
+    station = await stations.nearest_station(client, lat, lon)
+    snapshot = stations.apply_station(snapshot, station, _best_windows)
+    snapshot.setdefault("station", None)
     _cache.set(key, snapshot)
     return snapshot
 

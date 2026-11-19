@@ -249,3 +249,10 @@ footer.foot { text-align: center; color: var(--muted); font-size: .8rem; padding
   background: var(--brand); color: #fff; font-weight: 700; cursor: pointer; transition: top .2s; }
 .skip:focus { top: 12px; }
 main:focus { outline: none; }
+
+/* live station reading */
+.tag.live { background: rgba(22, 163, 74, .14); color: var(--brand2); display: inline-flex; align-items: center; gap: 6px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand2); animation: pulse-dot 1.6s ease-in-out infinite; }
+@keyframes pulse-dot { 50% { transform: scale(.6); opacity: .5; } }
+.station { margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: var(--card-solid);
+  border: 1px solid var(--border); font-size: .88rem; animation: rise-in .5s .2s both; }

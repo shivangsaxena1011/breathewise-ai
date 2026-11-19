@@ -13,7 +13,7 @@ A GenAI assistant that helps families and communities get through severe winter 
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.165-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-110%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-133%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/backend%20coverage-92%25-brightgreen)
 
 **[Live demo → breathewise-ai-tau.vercel.app](https://breathewise-ai-tau.vercel.app)**
@@ -68,7 +68,7 @@ BreatheWise turns live air-quality data and a short household profile into speci
 
 | Area | What the user gets |
 | --- | --- |
-| **🌤️ Today** | An estimated India AQI (CPCB method) with its category and health statement, current pollutants, and a 24-hour PM2.5 forecast. It marks the **cleanest and worst 2-hour windows** and explains *why* smog is building (low wind, shallow mixing layer, fog). A regional 5×5 pollution grid sits alongside the **Proactive Guardian**, which checks a planned activity against the forecast and suggests a cleaner time. |
+| **🌤️ Today** | An India AQI (CPCB method), **calibrated to the nearest live monitoring station** when one is within 30 km, with its category and health statement, current pollutants, and a 24-hour PM2.5 forecast. It marks the **cleanest and worst 2-hour windows** and explains *why* smog is building (low wind, shallow mixing layer, fog). A regional 5×5 pollution grid sits alongside the **Proactive Guardian**, which checks a planned activity against the forecast and suggests a cleaner time. |
 | **🛡️ Family Shield** | A risk level for **each family member** based on age, health conditions and time outdoors. Every action comes with a "Why?". It also gives a whole-home checklist and an adaptive daily routine built from the forecast windows. |
 | **🏠 Indoor Air Doctor** | Whether to open the windows right now, tips room by room, purifier sizing (clean-air delivery rate) for each room, and a low-cost DIY filter option for families without a purifier. |
 | **🌱 Travel & Impact** | CO₂ per person for 11 travel modes, with the maths shown. A **What-If simulator** covers switching travel mode, moving exercise to a cleaner hour (inhaled-dose reduction), not burning waste, and saving electricity. An eco tracker adds streaks, a weekly chart and challenges. |
@@ -88,19 +88,20 @@ It also has offline mode (the last reading is shown with its timestamp), dark mo
 └─────────────────────────┘  JSON  │  • Gemini layer: explain, personalise, triage│
                                    └──────┬──────────────────┬────────────────────┘
                                           │                  │
-                         Open-Meteo (free, no key)     Google Gemini API
-                         • CAMS air quality            • grounded chat
-                         • weather (wind, mixing)      • JSON-schema plans
-                         • geocoding                   • vision (photo triage)
+      Open-Meteo (free, no key)    WAQI stations (CPCB)    Google Gemini API
+      • CAMS air-quality model     • nearest live station   • grounded chat
+      • weather (wind, mixing)     • measured PM2.5 / AQI   • JSON-schema plans
+      • geocoding                                           • vision (photo triage)
 ```
 
 **Request flow, using the Family Shield as an example**
 
 1. The user picks a city and describes the household (names, ages, conditions, hours outside, commute).
-2. The backend fetches hourly air-quality and weather data (cached for 10 minutes for each ~1 km location).
-3. Deterministic code computes the AQI, the cleanest and worst windows, and each member's risk score and actions, and records which data was used.
-4. Gemini receives that plan as data and rewrites it into warm, personalised guidance in English or Hindi. It may not add numbers or drop safety actions.
-5. The UI shows both: the AI summary, and the rule-based actions with their *Why?*. If Gemini is unavailable, the rule-based plan is shown alone.
+2. The backend fetches hourly air-quality and weather data from the model, plus the nearest monitoring-station reading (cached for 10 minutes for each ~1 km location).
+3. If the station is close and recent, the model is calibrated to it (see below).
+4. Deterministic code computes the AQI, the cleanest and worst windows, and each member's risk score and actions, and records which data was used.
+5. Gemini receives that plan as data and rewrites it into warm, personalised guidance in English or Hindi. It may not add numbers or drop safety actions.
+6. The UI shows both: the AI summary, and the rule-based actions with their *Why?*. If Gemini is unavailable, the rule-based plan is shown alone.
 
 ## Decision logic
 
@@ -109,6 +110,7 @@ All numbers come from transparent, unit-tested code ([`backend/app/services`](ba
 | Decision | Logic |
 | --- | --- |
 | **AQI** | India NAQI (CPCB 2014): a sub-index per pollutant by linear interpolation within the breakpoint band, using 24-hour means for PM2.5, PM10, NO₂ and SO₂ and 8-hour means for O₃ and CO, with at least ⅔ data coverage. AQI is the maximum sub-index, and at least 3 pollutants including PM are required. |
+| **Station calibration** | Use the nearest WAQI station only if it is within 30 km and its reading is under 3 hours old. Convert its US-EPA PM2.5 and PM10 sub-indices back to µg/m³ (2013 EPA breakpoints, the scale WAQI uses). Correction factor = measured ÷ model value for the same hour, limited to between 0.4× and 3×, and skipped if the model reads under 5 µg/m³. The factor scales the 24-hour averages (so the AQI) and the whole hourly forecast, so every feature uses corrected numbers. With no token or no usable station, the model is used alone. |
 | **Best and worst time** | The cleanest and dirtiest consecutive 2-hour daytime windows (6:00–21:00) in the next 24 hours, then for each later day. |
 | **Smog drivers** | Wind below 6 km/h means pollution isn't dispersing. A mixing layer below 400 m means pollution is trapped near the ground. Humidity above 80% with temperature below 18 °C means fog plus smoke. |
 | **Member risk (0–5)** | Today's worst air level, plus 1 for a sensitive age (infant, child, elderly), plus 1 for lung or heart conditions (when the air is Moderate or worse), plus 1 for pregnancy, plus 1 for 4 or more hours outdoors. Capped at 5. Ties go to the person with more sensitivity factors. |
@@ -138,13 +140,19 @@ The core principle is **compute first, then explain**. The model never invents d
 | **Code quality** | Clear layers: routes in `main.py`, pure engines in `services/`, prompts in `assistant.py`, and the AI client in `gemini.py`. Strict TypeScript and typed Pydantic models throughout. The Ruff linter passes with zero issues, and pure logic (`eco.ts`, `aqi.py`) is kept separate from the UI. |
 | **Security** | The Gemini key lives only on the server and never reaches the browser. Every input is validated with Pydantic bounds and enums. Requests are rate-limited per IP (stricter for AI endpoints), using headers that can't be forged on Vercel. Uploads are checked by file signature and capped at 4 MB, and photos are never stored. Responses carry CSP, `X-Frame-Options`, `nosniff` and a referrer policy. SQL is parameterised. The UI never injects HTML, and the chat Markdown renderer is tested against XSS. Report locations are rounded to about 100 m, and community reports reject links. |
 | **Efficiency** | A 10-minute in-memory cache for each location and a shared HTTP client. Area-grid points are fetched in one batch request. Pages are lazy-loaded (about 80 KB gzipped for the main bundle). Charts and animations are plain CSS and SVG with no chart library, and hashed assets are cached for a year. Gzip is on, and the serverless function starts cold without any startup step. |
-| **Testing** | **110 automated tests.** 89 backend tests (pytest, 92% coverage) cover AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing and the Vercel entry point. 21 frontend tests (Vitest) cover tracker and streak logic, timezone-safe dates, error messages, i18n completeness and XSS-safe Markdown. GitHub Actions runs the linter, tests, type check and build on every push. |
+| **Testing** | **133 automated tests.** 112 backend tests (pytest, 92%+ coverage) cover AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing, station parsing and calibration, and the Vercel entry point. 21 frontend tests (Vitest) cover tracker and streak logic, timezone-safe dates, error messages, i18n completeness and XSS-safe Markdown. GitHub Actions runs the linter, tests, type check and build on every push. |
 | **Accessibility** | Semantic tabs with arrow-key navigation, a skip-to-content control, and labelled inputs. The AQI is shown as a number and a word, never colour alone. Live regions announce results. The chat dialog returns focus when it closes. `prefers-reduced-motion` and dark mode are respected, and every screen works at phone width. The whole interface, voice included, is available in Hindi. |
+
+## Data sources and attribution
+
+- Air-quality model, weather and geocoding: [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), using Copernicus Atmosphere Monitoring Service (CAMS) data.
+- Live station readings: the [World Air Quality Index Project](https://waqi.info/), relaying the originating agencies (in India, the Central Pollution Control Board). The app shows these credits with every station reading, as WAQI's terms require. The data is used free of charge, for non-commercial purposes.
 
 ## Assumptions
 
-- **Air data** is modelled (CAMS via Open-Meteo, roughly a 10–45 km grid), not taken from ground stations. Busy roads and burning sites can be much worse, and the UI says so wherever readings appear.
-- **The AQI is an estimate** of the CPCB index computed from those concentrations, not an official CPCB value.
+- **Air data** comes from an atmospheric model (CAMS via Open-Meteo, roughly a 10–45 km grid). When a monitoring station is within 30 km, the model is calibrated to that station's latest measurement. Busy roads and burning sites can still be worse than both.
+- **Calibration** assumes the station's error ratio at the current hour holds for the rest of the forecast. This works well for the next day, when weather patterns are similar, and is an approximation beyond that.
+- **The AQI is an estimate** of the CPCB index computed from those concentrations, not an official CPCB value. Station sub-indices are converted using the US-EPA 2013 breakpoints that WAQI reports in.
 - **Emission factors** are typical Indian-context values: petrol car 15 km/L, scooter 45 km/L, city bus 30 passengers, grid 0.72 kg CO₂/kWh, open waste burning about 8 g PM2.5 per kg. Each one is shown next to the result.
 - **Breathing rates** are typical adult values. Children breathe more air per kg of body weight, which the risk engine reflects qualitatively.
 - **Guidance** follows general public-health advice and is **not medical advice**. Serious symptoms always lead to "seek medical care".
@@ -157,7 +165,7 @@ The core principle is **compute first, then explain**. The model never invents d
 | Frontend | React 19, TypeScript (strict), Vite, hand-written CSS animations, Web Speech API, service worker |
 | Backend | Python 3.12+, FastAPI, Pydantic v2, httpx (async), SQLite |
 | AI | Google Gemini through the `google-genai` SDK (text, JSON schema, vision) |
-| Data | Open-Meteo Air Quality (CAMS), Forecast and Geocoding APIs |
+| Data | Open-Meteo Air Quality (CAMS), Forecast and Geocoding APIs; World Air Quality Index (WAQI) station feed (relays CPCB stations) |
 | Quality | pytest + pytest-cov, Vitest, Ruff, GitHub Actions |
 | Hosting | Vercel (static frontend and a Python serverless function) |
 
@@ -171,6 +179,7 @@ The core principle is **compute first, then explain**. The model never invents d
 │   │   └── services/
 │   │       ├── aqi.py        # CPCB NAQI maths
 │   │       ├── air_quality.py# Open-Meteo client, snapshot, forecast windows, smog drivers
+│   │       ├── stations.py   # nearest live station + model calibration
 │   │       ├── risk.py       # Family Shield risk engine
 │   │       ├── indoor.py     # ventilation verdict, room tips, purifier sizing
 │   │       ├── emissions.py  # travel / energy / burning estimates
@@ -179,7 +188,7 @@ The core principle is **compute first, then explain**. The model never invents d
 │   │       ├── community.py  # SQLite community reports
 │   │       ├── assistant.py  # prompts, grounding, rule-based fallback
 │   │       └── gemini.py     # Gemini client with model fallback
-│   └── tests/                # 89 pytest tests
+│   └── tests/                # 112 pytest tests
 ├── frontend/
 │   ├── public/               # logo, manifest, service worker
 │   └── src/
@@ -220,7 +229,7 @@ cd backend; .venv\Scripts\python -m ruff check app tests ..\api; .venv\Scripts\p
 cd frontend; npx tsc --noEmit; npm test
 ```
 
-**Configuration** (environment variables, see [.env.example](.env.example)): `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `AI_RATE_LIMIT_PER_MINUTE`, `AIR_CACHE_SECONDS`.
+**Configuration** (environment variables, see [.env.example](.env.example)): `GEMINI_API_KEY`, `WAQI_TOKEN` (free, for live station data), `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `AI_RATE_LIMIT_PER_MINUTE`, `AIR_CACHE_SECONDS`.
 
 **Deployment:** the app is deployed on **Vercel**. `vercel.json` builds the React app as static files and runs FastAPI as a Python serverless function (`api/index.py`) for every `/api/*` route. The Gemini key is set as a Vercel environment variable. A `Dockerfile` is also included for container platforms such as Google Cloud Run.
 
@@ -228,7 +237,7 @@ cd frontend; npx tsc --noEmit; npm test
 
 - **Persistence:** on Vercel, community reports are stored in temporary function storage and can reset when an instance restarts. The next step is a hosted database (for example Postgres or Firestore).
 - **Rule-based text in Hindi:** the AI responses and the interface are bilingual, but some rule-based action text from the backend is still English-only. Translating it is planned.
-- **Data:** the next step is to blend ground-station data (CPCB / OpenAQ) with the model data for true hyperlocal readings.
+- **Data:** the next step is to combine several nearby stations (inverse-distance weighting) and add a station map layer.
 - **Planned features:** push notifications for the Guardian, more Indian languages, and school and neighbourhood dashboards.
 
 ---

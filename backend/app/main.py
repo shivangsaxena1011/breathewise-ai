@@ -120,7 +120,7 @@ async def snapshot_or_502(request: Request, lat: float, lon: float) -> dict[str,
 # ----------------------------------------------------------------------------- meta & data
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "ai": gemini.enabled(),
+    return {"status": "ok", "ai": gemini.enabled(), "stations": bool(settings.waqi_token),
             "model": (gemini.active_model() or settings.gemini_model) if gemini.enabled() else None}
 
 

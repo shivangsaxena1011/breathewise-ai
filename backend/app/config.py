@@ -18,6 +18,7 @@ class Settings:
     gemini_fallback_models: list[str] = field(
         default_factory=lambda: _csv(os.getenv("GEMINI_FALLBACK_MODELS", "gemini-3.5-flash-lite,gemini-2.5-flash"))
     )
+    waqi_token: str = field(default_factory=lambda: os.getenv("WAQI_TOKEN", ""))
     allowed_origins: list[str] = field(
         default_factory=lambda: _csv(os.getenv("ALLOWED_ORIGINS", "http://localhost:5173"))
     )

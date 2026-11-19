@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, fmtHour, LEVEL_COLORS } from "../api";
+import { api, fmtHour, LEVEL_COLORS, type Station } from "../api";
 import { AqiRing, aqiLabel, Btn, Card, CitySearch, ForecastBars, NumInput } from "../components";
 import { AQI_HEALTH_HI } from "../i18n";
 import { useApp } from "../store";
@@ -22,6 +22,35 @@ function notify(body: string) {
       new Notification("BreatheWise", opts);
     }
   } catch { /* notifications are a bonus; the on-page alert already shows the message */ }
+}
+
+/** Live monitoring-station reading. Attribution to the data sources is required by the station data terms. */
+function StationLine({ st, timeZone }: { st: Station; timeZone: string }) {
+  const { t } = useApp();
+  // Show the city's own clock time, not the viewer's.
+  let time = st.measured_at.slice(11, 16);
+  try { time = new Date(st.measured_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone }); } catch { /* unknown tz */ }
+  return (
+    <div className="station" role="note">
+      <div>
+        📍 {t("measured_at")} <b>{st.name}</b> · {st.distance_km} {t("km_away")} · {time} ({st.age_minutes} {t("min_ago")})
+      </div>
+      <div className="row" style={{ gap: 14, marginTop: 4 }}>
+        <span>US AQI <b>{Math.round(st.us_aqi)}</b></span>
+        {st.pm25 != null && <span>PM2.5 ≈ <b>{Math.round(st.pm25)}</b> µg/m³</span>}
+        {st.calibration.pm2_5 != null && <span className="muted">{t("model_correction")}{st.calibration.pm2_5}</span>}
+      </div>
+      {st.attributions.length > 0 && (
+        <div className="small muted" style={{ marginTop: 4 }}>
+          {t("station_data")}:{" "}
+          {st.attributions.map((a, i) => (
+            <span key={a.name}>{i > 0 && " · "}{/^https?:\/\//.test(a.url)
+              ? <a href={a.url} target="_blank" rel="noopener noreferrer">{a.name}</a> : a.name}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Guardian() {
@@ -145,14 +174,17 @@ export default function Today() {
             <div style={{ position: "relative" }}>
               <div className="row">
                 <span className="badge">{aqiLabel(snap.aqi.label, lang)}</span>
-                <span className="tag" title={t("estimate_note")}>📡 {t("estimated")}</span>
+                {snap.aqi.basis === "station_calibrated"
+                  ? <span className="tag live" title={t("calibrated_note")}><span className="live-dot" aria-hidden="true" /> {t("calibrated")}</span>
+                  : <span className="tag" title={t("estimate_note")}>📡 {t("estimated")}</span>}
               </div>
               <h2>📍 {place.name}</h2>
               <p style={{ margin: "4px 0 10px" }}>{lang === "hi" && snap.aqi.category ? AQI_HEALTH_HI[snap.aqi.category] ?? snap.aqi.health : snap.aqi.health}</p>
               <div className="small muted">
-                {t("dominant")}: <b>{snap.aqi.dominant ?? "—"}</b> · US AQI {snap.aqi.us_aqi ?? "—"} · {t("updated")} {fmtHour(snap.observed_at)}
+                {t("dominant")}: <b>{snap.aqi.dominant ?? "—"}</b> · US AQI {Math.round(snap.station?.us_aqi ?? snap.aqi.us_aqi ?? NaN) || "—"} · {t("updated")} {fmtHour(snap.observed_at)}
                 {" "}({snap.location.timezone})
               </div>
+              {snap.station && <StationLine st={snap.station} timeZone={snap.location.timezone} />}
             </div>
           </section>
 
