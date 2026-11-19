@@ -1,0 +1,108 @@
+import pytest
+
+from app.schemas import Activity, Home, Household, Member, Room
+from app.services import emissions, exposure, indoor, planner, risk
+from app.services.air_quality import build_snapshot
+from app.services.assistant import fallback_answer
+from tests.conftest import make_air_payload, make_weather_payload
+
+
+@pytest.fixture
+def snap():
+    return build_snapshot(make_air_payload(), make_weather_payload())
+
+
+def test_sensitive_members_get_higher_risk():
+    adult = risk.member_risk(Member(name="A"), 3)
+    child = risk.member_risk(Member(name="C", age_group="child"), 3)
+    gran = risk.member_risk(Member(name="G", age_group="elderly", conditions=["copd"]), 3)
+    assert adult["score"] < child["score"] < gran["score"]
+    assert gran["factors"], "risk must be explained"
+
+
+def test_risk_is_capped():
+    m = Member(name="X", age_group="elderly", conditions=["asthma", "pregnant"], outdoor_hours=10)
+    assert risk.member_risk(m, 5)["score"] == 5
+
+
+def test_family_plan_has_reasons_for_every_action(snap):
+    hh = Household(members=[Member(name="Riya", age_group="child"), Member(name="Dadi", age_group="elderly")])
+    plan = risk.build_plan(hh, snap)
+    assert plan["most_at_risk"] in {"Riya", "Dadi"}
+    for m in plan["members"]:
+        assert all(a["why"] for a in m["actions"])
+    assert plan["explanation"]["method"]
+
+
+def test_infants_never_get_mask_advice():
+    acts = risk.member_actions(Member(name="Baby", age_group="infant"), 4, 5, None, None)
+    assert not any("N95" in a["text"] for a in acts)
+
+
+def test_mode_comparison_is_sorted_and_carpool_divides():
+    solo = emissions.compare_trip(10, 1)
+    pool = emissions.compare_trip(10, 4, ["car_petrol"])
+    assert solo["rows"][0]["kg_co2_per_person"] == 0
+    car = next(r for r in solo["rows"] if r["mode"] == "car_petrol")
+    assert car["kg_co2_per_person"] == pytest.approx(10 * 2.31 / 15, rel=1e-3)
+    assert pool["rows"][0]["kg_co2_per_person"] == pytest.approx(car["kg_co2_per_person"] / 4, rel=1e-2)
+    assert "exposure" in solo["exposure_note"].lower()
+
+
+def test_mode_shift_savings():
+    r = emissions.mode_shift("car_petrol", "metro", 10, 5)
+    assert r["km_per_week"] == 100
+    assert r["kg_co2_saved_week"] == pytest.approx(100 * (2.31 / 15 - 0.03), rel=1e-2)
+    assert r["kg_co2_saved_year"] == pytest.approx(r["kg_co2_saved_week"] * 52, rel=1e-2)
+
+
+def test_waste_and_energy_assumptions_are_listed():
+    assert emissions.waste_burning(2)["pm25_g_avoided_year"] == 832
+    assert emissions.energy_saving(50)["assumptions"]
+
+
+def test_exercise_shift_reduces_dose(snap):
+    r = exposure.exercise_shift(snap, current_hour=19, duration_min=60, intensity="moderate")
+    assert r["available"] and r["dose_reduction_pct"] > 50
+    assert r["best"]["pm2_5"] < r["usual"]["pm2_5"]
+
+
+def test_ventilation_closed_on_dirty_air(snap):
+    assert indoor.ventilation_verdict(snap)["verdict"] in {"closed", "brief"}
+
+
+def test_purifier_sizing():
+    p = indoor.purifier_size(Room(kind="bedroom", area_m2=12, height_m=2.5))
+    assert p["volume_m3"] == 30 and p["cadr_m3h"] == 150
+
+
+def test_biomass_kitchen_tip_first(snap):
+    d = indoor.diagnose(Home(cooking_fuel="biomass"), [Room(kind="kitchen")], snap)
+    assert "Biomass" in d["rooms"][0]["tips"][0]["text"]
+
+
+def test_alert_suggests_cleaner_time(snap):
+    acts = [Activity(title="Cricket", start="2026-11-19T19:00", duration_min=60, sensitive=True)]
+    out = planner.alerts(acts, snap, None)["alerts"][0]
+    assert out["status"] == "warn" and "suggested_time" in out
+
+
+def test_alert_outside_forecast(snap):
+    acts = [Activity(title="Trip", start="2026-12-30T10:00")]
+    assert planner.alerts(acts, snap, None)["alerts"][0]["status"] == "unknown"
+
+
+def test_routine_is_time_sorted(snap):
+    hh = Household(members=[Member(name="A", exercises_outdoors=True), Member(name="K", age_group="child")])
+    steps = planner.routine(hh, snap, "car_petrol")["steps"]
+    assert [s["time"] for s in steps] == sorted(s["time"] for s in steps)
+
+
+@pytest.mark.parametrize("msg,lang,needle", [
+    ("Is it safe to go jogging?", "en", "AQI"),
+    ("Aaj bachchon ko bahar bhejna?", "hi", "बच्चों"),
+    ("which mask should I buy", "en", "N95"),
+    ("hello", "en", "rule-based"),
+])
+def test_fallback_answers(snap, msg, lang, needle):
+    assert needle in fallback_answer(msg, snap, lang)

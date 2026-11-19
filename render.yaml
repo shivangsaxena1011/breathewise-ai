@@ -1,0 +1,15 @@
+# One-click deploy on Render's free plan (no credit card needed).
+# Render builds the Dockerfile and injects $PORT. Add GEMINI_API_KEY in the dashboard when asked.
+services:
+  - type: web
+    name: breathewise-ai
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash

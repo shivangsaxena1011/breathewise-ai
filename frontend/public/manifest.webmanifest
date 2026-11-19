@@ -1,0 +1,10 @@
+{
+  "name": "BreatheWise AI",
+  "short_name": "BreatheWise",
+  "description": "Smog survival assistant for families",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3faf7",
+  "theme_color": "#0f766e",
+  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

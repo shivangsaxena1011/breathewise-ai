@@ -1,0 +1,85 @@
+import type { Lang } from "./api";
+
+const en = {
+  tagline: "Breathe smarter. Live healthier.",
+  tab_today: "Today", tab_family: "Family", tab_home: "Home Air", tab_impact: "Impact", tab_community: "Community",
+  search_city: "Search your city", use_location: "Use my location", my_location: "My location",
+  loading: "Reading the air…", retry: "Try again",
+  hero_title: "How's the air today?", hero_sub: "Search a city to see the air, the cleanest hours and what to do.",
+  aqi_label: "Air Quality Index", estimated: "Model estimate", updated: "Data for",
+  dominant: "Main pollutant", next_hours: "Next 24 hours", best_time: "Cleanest time", worst_time: "Smog peak",
+  why_smog: "Why the air is bad right now", pollutants: "Pollutants now", area: "Around you",
+  area_note: "Each square ≈ 40 km of model grid. Local hotspots can be worse.",
+  guardian: "Planning to go out?", guardian_sub: "Add an activity and get a heads-up if the air will be bad.",
+  activity: "Activity", when: "When", minutes: "Minutes", check: "Check", sensitive: "For a sensitive person",
+  family_title: "Family Shield", family_sub: "Add who lives with you. Get a protection plan for each person.",
+  add_member: "Add person", name: "Name", age: "Age group", conditions: "Health conditions", outdoor_h: "Hours outdoors / day",
+  exercises: "Exercises outdoors", commute: "Commute", make_plan: "Make our plan", risk: "Risk",
+  household_steps: "For the whole home", why: "Why?", routine: "Today's routine", most_at_risk: "Most at risk",
+  home_title: "Indoor Air Doctor", home_sub: "Simple steps that make your home's air cleaner.",
+  purifier: "Have an air purifier", fuel: "Cooking fuel", smoker: "Someone smokes indoors", incense: "Burn incense / coils",
+  pets: "Have pets", rooms: "Rooms", check_home: "Check my home", windows_now: "Windows right now",
+  purifier_need: "Purifier needed (CADR)",
+  impact_title: "Travel & Impact", impact_sub: "Compare trips, try What-If ideas and track your green actions.",
+  trip_km: "Trip distance (km)", people: "People in vehicle", compare: "Compare", kg_co2: "kg CO₂ per person",
+  whatif: "What-If simulator", from: "From", to: "To", km_one_way: "km one way", days_week: "Days / week",
+  run_whatif: "Simulate", exercise_at: "Usually exercise at", explain_ai: "Explain with AI",
+  tracker: "Eco tracker", log_action: "Log", this_week: "This week", streak: "Day streak", saved: "kg CO₂ saved",
+  challenges: "Weekly challenges", assumptions: "How we calculated this",
+  community_title: "Community Watch", community_sub: "Report smoke, burning or dust near you. Neighbours can confirm it.",
+  category: "What did you see?", description: "Describe it", photo: "Add a photo (AI helps fill the form)",
+  submit_report: "Send report", confirm: "I see it too", nearby: "Reports near you", no_reports: "No reports nearby yet.",
+  privacy_note: "We store only the category, text and location rounded to ~100 m. Photos are never saved.",
+  chat_title: "Ask BreatheWise", chat_placeholder: "Ask anything… e.g. Is it safe to jog now?", send: "Send",
+  speak: "Speak", rules_mode: "Offline answer (AI key not set)", offline: "Offline — showing last saved data from",
+  disclaimer: "General guidance, not medical advice. Air data is a model estimate from CAMS via Open-Meteo.",
+  pick_city_first: "Pick a city on the Today tab first.",
+};
+
+export type Key = keyof typeof en;
+
+const hi: Record<Key, string> = {
+  tagline: "समझदारी से साँस लें। सेहतमंद रहें।",
+  tab_today: "आज", tab_family: "परिवार", tab_home: "घर की हवा", tab_impact: "असर", tab_community: "समुदाय",
+  search_city: "अपना शहर खोजें", use_location: "मेरी लोकेशन", my_location: "मेरी लोकेशन",
+  loading: "हवा की जाँच हो रही है…", retry: "फिर कोशिश करें",
+  hero_title: "आज हवा कैसी है?", hero_sub: "शहर खोजें — हवा, सबसे साफ़ समय और क्या करें, सब देखें।",
+  aqi_label: "वायु गुणवत्ता सूचकांक", estimated: "मॉडल अनुमान", updated: "डेटा का समय",
+  dominant: "मुख्य प्रदूषक", next_hours: "अगले 24 घंटे", best_time: "सबसे साफ़ समय", worst_time: "स्मॉग का चरम",
+  why_smog: "अभी हवा ख़राब क्यों है", pollutants: "अभी के प्रदूषक", area: "आसपास",
+  area_note: "हर खाना ≈ 40 किमी का मॉडल ग्रिड है। स्थानीय हॉटस्पॉट और ख़राब हो सकते हैं।",
+  guardian: "बाहर जाने की योजना?", guardian_sub: "गतिविधि जोड़ें — हवा ख़राब होगी तो हम पहले बताएँगे।",
+  activity: "गतिविधि", when: "कब", minutes: "मिनट", check: "जाँचें", sensitive: "संवेदनशील व्यक्ति के लिए",
+  family_title: "फ़ैमिली शील्ड", family_sub: "घर के लोगों को जोड़ें, हर व्यक्ति के लिए सुरक्षा योजना पाएँ।",
+  add_member: "व्यक्ति जोड़ें", name: "नाम", age: "आयु वर्ग", conditions: "स्वास्थ्य स्थिति", outdoor_h: "रोज़ बाहर (घंटे)",
+  exercises: "बाहर व्यायाम करते हैं", commute: "आने-जाने का साधन", make_plan: "हमारी योजना बनाएँ", risk: "जोखिम",
+  household_steps: "पूरे घर के लिए", why: "क्यों?", routine: "आज की दिनचर्या", most_at_risk: "सबसे ज़्यादा जोखिम",
+  home_title: "इनडोर एयर डॉक्टर", home_sub: "आसान कदम जो घर की हवा साफ़ करें।",
+  purifier: "एयर प्यूरीफायर है", fuel: "खाना पकाने का ईंधन", smoker: "घर में कोई धूम्रपान करता है", incense: "अगरबत्ती / कॉइल जलाते हैं",
+  pets: "पालतू जानवर हैं", rooms: "कमरे", check_home: "मेरा घर जाँचें", windows_now: "अभी खिड़कियाँ",
+  purifier_need: "ज़रूरी प्यूरीफायर (CADR)",
+  impact_title: "यात्रा और असर", impact_sub: "यात्राओं की तुलना करें, What-If आज़माएँ और हरित कदम दर्ज करें।",
+  trip_km: "दूरी (किमी)", people: "वाहन में लोग", compare: "तुलना करें", kg_co2: "किग्रा CO₂ प्रति व्यक्ति",
+  whatif: "What-If सिम्युलेटर", from: "से", to: "तक", km_one_way: "किमी एक तरफ़", days_week: "दिन / सप्ताह",
+  run_whatif: "सिम्युलेट करें", exercise_at: "आमतौर पर व्यायाम का समय", explain_ai: "AI से समझाएँ",
+  tracker: "इको ट्रैकर", log_action: "दर्ज करें", this_week: "इस सप्ताह", streak: "दिन लगातार", saved: "किग्रा CO₂ बचाया",
+  challenges: "साप्ताहिक चुनौतियाँ", assumptions: "हमने यह कैसे गिना",
+  community_title: "कम्युनिटी वॉच", community_sub: "धुआँ, कचरा जलाना या धूल दिखे तो रिपोर्ट करें। पड़ोसी पुष्टि कर सकते हैं।",
+  category: "आपने क्या देखा?", description: "विवरण लिखें", photo: "फ़ोटो जोड़ें (AI फ़ॉर्म भरने में मदद करेगा)",
+  submit_report: "रिपोर्ट भेजें", confirm: "मुझे भी दिख रहा है", nearby: "आसपास की रिपोर्ट", no_reports: "आसपास अभी कोई रिपोर्ट नहीं।",
+  privacy_note: "हम केवल श्रेणी, विवरण और ~100 मीटर तक गोल की गई लोकेशन रखते हैं। फ़ोटो कभी सेव नहीं होती।",
+  chat_title: "BreatheWise से पूछें", chat_placeholder: "कुछ भी पूछें… जैसे: क्या अभी दौड़ना ठीक है?", send: "भेजें",
+  speak: "बोलें", rules_mode: "ऑफ़लाइन उत्तर (AI कुंजी सेट नहीं)", offline: "ऑफ़लाइन — पिछला सेव डेटा:",
+  disclaimer: "सामान्य मार्गदर्शन, चिकित्सा सलाह नहीं। हवा का डेटा CAMS (Open-Meteo) का मॉडल अनुमान है।",
+  pick_city_first: "पहले 'आज' टैब पर शहर चुनें।",
+};
+
+export const dictionaries: Record<Lang, Record<Key, string>> = { en, hi };
+
+export function translate(lang: Lang, key: Key): string {
+  return dictionaries[lang][key] ?? en[key];
+}
+
+export const AQI_LABELS_HI: Record<string, string> = {
+  Good: "अच्छा", Satisfactory: "संतोषजनक", Moderate: "मध्यम", Poor: "ख़राब", "Very Poor": "बहुत ख़राब", Severe: "गंभीर",
+};
