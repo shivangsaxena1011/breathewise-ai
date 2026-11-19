@@ -7,3 +7,7 @@ backend/data/
 .env
 *.db
 .claude/
+.vercel
+
+.env*
+!.env.example
