@@ -106,7 +106,8 @@ def household_actions(household: Household, air_level: int, best: str | None, wo
                      "why": "Fresh air removes cooking fumes and CO₂ while outdoor air is relatively clean.",
                      "priority": "medium"})
     if home.has_purifier:
-        acts.append({"text": "Run the purifier on high in the bedroom where the most sensitive person sleeps; keep the door closed.",
+        acts.append({"text": "Run the purifier on high in the bedroom where the most sensitive person sleeps; "
+                             "keep the door closed.",
                      "why": "A purifier cleans one closed room well rather than a whole house poorly.", "priority": "high"})
     elif air_level >= 3:
         acts.append({"text": "No purifier? A box fan with a MERV-13 filter taped to it makes a low-cost DIY air cleaner.",
@@ -114,7 +115,8 @@ def household_actions(household: Household, air_level: int, best: str | None, wo
                      "priority": "medium"})
     if home.cooking_fuel in ("biomass", "kerosene"):
         acts.append({"text": "Cook with ventilation or outdoors-side doors open, and switch to LPG/induction if possible.",
-                     "why": "Solid-fuel and kerosene cooking is one of the largest indoor pollution sources.", "priority": "high"})
+                     "why": "Solid-fuel and kerosene cooking is one of the largest indoor pollution sources.",
+                     "priority": "high"})
     if home.smoker_at_home:
         acts.append({"text": "Keep the home smoke-free; smoke only outside, away from windows.",
                      "why": "Indoor smoking can raise PM2.5 more than a severe smog day outside.", "priority": "high"})

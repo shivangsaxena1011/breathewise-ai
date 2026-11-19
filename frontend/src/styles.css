@@ -243,3 +243,9 @@ footer.foot { text-align: center; color: var(--muted); font-size: .8rem; padding
 
 .span-3 { grid-column: span 3; }
 @media (max-width: 820px) { .span-3 { grid-column: span 12; } }
+
+/* skip link: hidden until focused with the keyboard */
+.skip { position: absolute; left: 16px; top: -60px; z-index: 100; padding: 10px 16px; border-radius: 12px; border: 0;
+  background: var(--brand); color: #fff; font-weight: 700; cursor: pointer; transition: top .2s; }
+.skip:focus { top: 12px; }
+main:focus { outline: none; }

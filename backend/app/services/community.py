@@ -40,6 +40,9 @@ class ReportStore:
             )""")
         self._conn.commit()
 
+    def close(self) -> None:
+        self._conn.close()
+
     @staticmethod
     def moderate(text: str) -> bool:
         low = text.lower()

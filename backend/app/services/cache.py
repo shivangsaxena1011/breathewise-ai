@@ -47,8 +47,8 @@ class RateLimiter:
         now = time.monotonic()
         hits = self._hits.get(key)
         if hits is None:
-            if len(self._hits) >= self.max_keys:
-                self._hits.clear()
+            while len(self._hits) >= self.max_keys:  # evict the oldest key, not every user's limit
+                self._hits.pop(next(iter(self._hits)))
             hits = self._hits[key] = deque()
         while hits and hits[0] <= now - self.window:
             hits.popleft()

@@ -1,8 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, type Household, type Lang, type Place, type Snapshot } from "./api";
+import { localDate, type EcoLog } from "./eco";
 import { translate, type Key } from "./i18n";
 
-export interface EcoLog { id: string; date: string; label: string; kg: number }
+export { localDate, type EcoLog };
+
+/** crypto.randomUUID only exists in secure contexts (HTTPS/localhost); fall back elsewhere (e.g. LAN testing on a phone). */
+function newId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -25,6 +33,8 @@ export const DEFAULT_HOUSEHOLD: Household = {
 
 interface Ctx {
   lang: Lang; setLang: (l: Lang) => void; t: (k: Key) => string;
+  /** Inline bilingual text for short labels that don't need a dictionary key. */
+  tx: (en: string, hi: string) => string;
   place: Place | null; setPlace: (p: Place) => void;
   snap: Snapshot | null; loading: boolean; error: string | null; offlineSince: string | null; refresh: () => void;
   household: Household; setHousehold: (h: Household) => void;
@@ -48,24 +58,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { api.health().then((h) => setAi(h.ai)).catch(() => setAi(false)); }, []);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
+  const latest = useRef(0);
+  const snapFor = useRef<string | null>(null);
   const fetchAir = useCallback(async (p: Place) => {
+    const id = ++latest.current; // ignore responses for a city the user already switched away from
     setLoading(true);
     setError(null);
+    const key = `${p.lat},${p.lon}`;
+    if (snapFor.current !== key) { setSnap(null); setOfflineSince(null); } // don't show the old city's numbers
     try {
       const s = await api.air(p);
+      if (id !== latest.current) return;
+      snapFor.current = key;
       setSnap(s);
       setOfflineSince(null);
       save("bw.lastSnap", { place: p, snap: s });
     } catch (e) {
+      if (id !== latest.current) return;
       const cached = load<{ place: Place; snap: Snapshot } | null>("bw.lastSnap", null);
       if (cached && cached.place.lat === p.lat && cached.place.lon === p.lon) {
+        snapFor.current = key;
         setSnap(cached.snap);
         setOfflineSince(cached.snap.fetched_at);
       } else {
         setError((e as Error).message);
       }
     } finally {
-      setLoading(false);
+      if (id === latest.current) setLoading(false);
     }
   }, []);
 
@@ -75,6 +94,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lang,
     setLang: (l) => { setLangState(l); save("bw.lang", l); },
     t: (k) => translate(lang, k),
+    tx: (en, hi) => (lang === "hi" ? hi : en),
     place,
     setPlace: (p) => { setPlaceState(p); save("bw.place", p); },
     snap, loading, error, offlineSince,
@@ -83,7 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHousehold: (h) => { setHouseholdState(h); save("bw.household", h); },
     logs,
     addLog: (l) => setLogs((prev) => {
-      const next = [{ ...l, id: crypto.randomUUID(), date: new Date().toISOString().slice(0, 10) }, ...prev].slice(0, 500);
+      const next = [{ ...l, id: newId(), date: localDate() }, ...prev].slice(0, 500);
       save("bw.logs", next);
       return next;
     }),

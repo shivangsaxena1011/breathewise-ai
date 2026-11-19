@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .schemas import (AlertsRequest, ChatRequest, IndoorRequest, Lang, MobilityRequest, PlanRequest, ReportCreate,
-                      RoutineRequest, WhatIfRequest)
+from .schemas import (
+    AlertsRequest,
+    ChatRequest,
+    IndoorRequest,
+    Lang,
+    MobilityRequest,
+    PlanRequest,
+    ReportCreate,
+    RoutineRequest,
+    WhatIfRequest,
+)
 from .services import air_quality, assistant, emissions, exposure, gemini, indoor, planner, risk
 from .services.cache import RateLimiter
 from .services.community import ReportStore
@@ -25,6 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("breathewise")
 
 MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+ON_VERCEL = bool(os.getenv("VERCEL"))
 IMAGE_SIGNATURES = {b"\xff\xd8\xff": "image/jpeg", b"\x89PNG\r\n\x1a\n": "image/png"}
 
 general_limiter = RateLimiter(settings.rate_limit_per_minute)
@@ -53,6 +64,9 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.http.aclose()
     app.state.http = None
+    if getattr(app.state, "store", None) is not None:
+        app.state.store.close()
+        app.state.store = None
 
 
 app = FastAPI(title="BreatheWise AI", version="1.0.0", lifespan=lifespan,
@@ -63,8 +77,16 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins,
 
 
 def client_ip(request: Request) -> str:
+    """Best-effort client IP. Prefer headers set by the platform edge (Vercel / Cloud Run),
+    which a client cannot forge, over the first X-Forwarded-For entry, which it can."""
+    if ON_VERCEL:  # Vercel overwrites these, so clients cannot forge them there
+        for header in ("x-vercel-forwarded-for", "x-real-ip"):
+            if value := request.headers.get(header):
+                return value.split(",")[0].strip()
     fwd = request.headers.get("x-forwarded-for")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+    if fwd:
+        return fwd.split(",")[-1].strip()  # rightmost entry is appended by the platform's front end
+    return request.client.host if request.client else "unknown"
 
 
 @app.middleware("http")
@@ -98,7 +120,8 @@ async def snapshot_or_502(request: Request, lat: float, lon: float) -> dict[str,
 # ----------------------------------------------------------------------------- meta & data
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "ai": gemini.enabled(), "model": settings.gemini_model if gemini.enabled() else None}
+    return {"status": "ok", "ai": gemini.enabled(),
+            "model": (gemini.active_model() or settings.gemini_model) if gemini.enabled() else None}
 
 
 @app.get("/api/geocode")
@@ -140,7 +163,8 @@ async def indoor_doctor(req: IndoorRequest, request: Request):
 @app.post("/api/routine")
 async def daily_routine(req: RoutineRequest, request: Request):
     snap = await snapshot_or_502(request, req.lat, req.lon)
-    return planner.routine(req.household, snap, req.commute_mode)
+    commute = req.commute_mode or next((m.commute_mode for m in req.household.members if m.commute_mode), None)
+    return planner.routine(req.household, snap, commute)
 
 
 @app.post("/api/alerts")
@@ -167,9 +191,12 @@ async def what_if(req: WhatIfRequest, request: Request):
     if req.exercise_shift:
         if req.lat is None or req.lon is None:
             raise HTTPException(status_code=422, detail="Location is needed for the exercise-timing scenario.")
-        snap = await snapshot_or_502(request, req.lat, req.lon)
         e = req.exercise_shift
-        results["exercise_shift"] = exposure.exercise_shift(snap, e.current_hour, e.duration_min, e.intensity)
+        try:
+            snap = await air_quality.get_snapshot(get_http(request.app), req.lat, req.lon)
+            results["exercise_shift"] = exposure.exercise_shift(snap, e.current_hour, e.duration_min, e.intensity)
+        except air_quality.UpstreamError:
+            results["exercise_shift"] = {"available": False, "reason": "Forecast unavailable right now."}
     if not results:
         raise HTTPException(status_code=422, detail="Pick at least one scenario.")
     explanation = await assistant.explain_what_if(results, req.lang) if req.explain else None
@@ -204,9 +231,23 @@ async def create_report(report: ReportCreate, request: Request):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+_confirmed: set[tuple[str, int]] = set()
+
+
 @app.post("/api/reports/{report_id}/confirm")
 async def confirm_report(report_id: int, request: Request):
-    result = get_store(request.app).confirm(report_id)
+    store = get_store(request.app)
+    key = (client_ip(request), report_id)
+    if key in _confirmed:  # one confirmation per person per report
+        result = store.get(report_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return result
+    result = store.confirm(report_id)
+    if result is not None:
+        if len(_confirmed) > 50_000:
+            _confirmed.clear()
+        _confirmed.add(key)
     if result is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return result

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import Chat from "./Chat";
+import ErrorBoundary from "./ErrorBoundary";
 import { Sky } from "./components";
 import type { Key } from "./i18n";
 import { useApp } from "./store";
@@ -33,31 +34,44 @@ function useHashTab(): [string, (id: string) => void] {
 }
 
 export default function App() {
-  const { t, lang, setLang } = useApp();
+  const { t, tx, lang, setLang } = useApp();
   const [tab, go] = useHashTab();
+  const onTabKey = (e: React.KeyboardEvent, i: number) => {
+    const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : null;
+    if (next === null) return;
+    e.preventDefault();
+    const id = TABS[(next + TABS.length) % TABS.length].id;
+    go(id);
+    requestAnimationFrame(() => document.getElementById(`tab-${id}`)?.focus());
+  };
 
   return (
     <>
       <Sky />
+      <button className="skip" onClick={() => document.getElementById("panel")?.focus()}>
+        {tx("Skip to main content", "मुख्य सामग्री पर जाएँ")}
+      </button>
       <div className="shell">
         <header className="top">
-          <a className="brand" href="#today" aria-label="BreatheWise AI home">
+          <a className="brand" href="#today" aria-label={tx("BreatheWise AI home", "BreatheWise AI होम")}>
             <img src="/logo.svg" alt="" width={44} height={44} />
             <div><h1>Breathe<span>Wise</span> AI</h1><small>{t("tagline")}</small></div>
           </a>
-          <div className="lang" role="group" aria-label="Language">
+          <div className="lang" role="group" aria-label={tx("Language", "भाषा")}>
             <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
             <button aria-pressed={lang === "hi"} onClick={() => setLang("hi")}>हिं</button>
           </div>
         </header>
-        <nav className="tabs" role="tablist" aria-label="Sections">
-          {TABS.map((x) => (
-            <button key={x.id} role="tab" aria-selected={tab === x.id} onClick={() => go(x.id)}>
+        <nav className="tabs" role="tablist" aria-label={tx("Sections", "भाग")}>
+          {TABS.map((x, i) => (
+            <button key={x.id} id={`tab-${x.id}`} role="tab" aria-selected={tab === x.id} aria-controls="panel"
+              tabIndex={tab === x.id ? 0 : -1} onClick={() => go(x.id)} onKeyDown={(e) => onTabKey(e, i)}>
               <span aria-hidden="true">{x.icon}</span>{t(x.key)}
             </button>
           ))}
         </nav>
-        <main role="tabpanel" key={tab}>
+        <main id="panel" role="tabpanel" tabIndex={-1} aria-labelledby={`tab-${tab}`} key={tab}>
+          <ErrorBoundary resetKey={tab}>
           <Suspense fallback={<div className="card skeleton" style={{ height: 240, marginTop: 18 }} />}>
             {tab === "today" && <Today />}
             {tab === "family" && <Family />}
@@ -65,8 +79,9 @@ export default function App() {
             {tab === "impact" && <Impact />}
             {tab === "community" && <Community />}
           </Suspense>
+          </ErrorBoundary>
         </main>
-        <footer className="foot">{t("disclaimer")}<br />BreatheWise AI · PromptWars Challenge 6</footer>
+        <footer className="foot">{t("disclaimer")}<br />© {new Date().getFullYear()} BreatheWise AI</footer>
       </div>
       <Chat />
     </>

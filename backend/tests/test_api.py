@@ -100,8 +100,8 @@ def test_reports_lifecycle_and_privacy(client):
     assert r.status_code == 201
     rep = r.json()
     assert rep["lat"] == 28.613 and rep["status"] == "unverified"
-    for _ in range(3):
-        rep = client.post(f"/api/reports/{rep['id']}/confirm").json()
+    for i in range(3):  # three different neighbours
+        rep = client.post(f"/api/reports/{rep['id']}/confirm", headers={"x-forwarded-for": f"10.0.0.{i}"}).json()
     assert rep["status"] == "confirmed"
     assert len(client.get("/api/reports", params=LOC).json()["reports"]) == 1
 
@@ -130,3 +130,53 @@ def test_rate_limit(client):
     finally:
         main.general_limiter.limit = old
     assert codes[-1] == 429
+
+
+def test_same_person_cannot_confirm_twice(client):
+    rep = client.post("/api/reports", json={"category": "other", "description": "Smoke near the bridge",
+                                            "lat": 28.6, "lon": 77.2}).json()
+    for _ in range(3):
+        last = client.post(f"/api/reports/{rep['id']}/confirm", headers={"x-forwarded-for": "10.9.9.9"}).json()
+    assert last["confirmations"] == 1
+
+
+def test_spoofed_forwarded_for_does_not_bypass_rate_limit(client):
+    from app import main
+    main.general_limiter.limit, old = 3, main.general_limiter.limit
+    try:
+        codes = [client.get("/api/air", params=LOC, headers={"x-forwarded-for": f"1.2.3.{i}, 9.9.9.9"}).status_code
+                 for i in range(5)]
+    finally:
+        main.general_limiter.limit = old
+    assert codes[-1] == 429
+
+
+def test_chat_without_location_never_claims_air_is_fine(client):
+    body = client.post("/api/chat", json={"message": "Can I go jogging?"}).json()
+    assert body["mode"] == "rules" and "won't guess" in body["reply"]
+
+
+def test_vercel_headers_ignored_off_vercel(client):
+    from app import main
+    main.general_limiter.limit, old = 3, main.general_limiter.limit
+    try:
+        codes = [client.get("/api/air", params=LOC, headers={"x-vercel-forwarded-for": f"7.7.7.{i}"}).status_code
+                 for i in range(5)]
+    finally:
+        main.general_limiter.limit = old
+    assert codes[-1] == 429
+
+
+def test_whatif_survives_forecast_outage(client_factory):
+    c = client_factory(fail_air=True)
+    body = c.post("/api/whatif", json={
+        **LOC, "mode_shift": {"from_mode": "car_petrol", "to_mode": "bus", "distance_km_one_way": 8, "days_per_week": 3},
+        "exercise_shift": {"current_hour": 19}}).json()
+    assert body["results"]["mode_shift"]["kg_co2_saved_year"] > 0
+    assert body["results"]["exercise_shift"]["available"] is False
+
+
+def test_past_activity_is_flagged(client):
+    body = client.post("/api/alerts", json={**LOC, "activities": [
+        {"title": "Morning walk", "start": "2026-11-19T07:00", "duration_min": 30}]}).json()
+    assert body["alerts"][0]["status"] == "unknown" and "passed" in body["alerts"][0]["message"]

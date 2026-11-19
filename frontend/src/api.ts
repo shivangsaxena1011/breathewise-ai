@@ -22,7 +22,7 @@ export interface Hour { time: string; pm2_5: number | null; pm10: number | null;
 export interface Window { date: string; best: { start: string; pm2_5: number; level: number }; worst: { start: string; pm2_5: number; level: number } }
 export interface Source { name: string; url: string; kind: string; note: string }
 export interface Aqi {
-  value: number | null; scale: string; label: string; level: number | null; color: string; health: string;
+  value: number | null; scale: string; label: string; category: string | null; level: number | null; color: string; health: string;
   dominant: string | null; sub_indices: Record<string, number>; us_aqi: number | null;
 }
 export interface Snapshot {
@@ -46,11 +46,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError("You seem to be offline.", 0);
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const detail = typeof body.detail === "string" ? body.detail : "Something went wrong. Please try again.";
-    throw new ApiError(detail, res.status);
-  }
+  if (!res.ok) throw new ApiError(errorMessage(body, res.status), res.status);
   return body as T;
+}
+
+/** Readable message from an API error body. FastAPI validation errors arrive as a list. */
+export function errorMessage(body: unknown, status: number): string {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail;
+  const first = Array.isArray(detail) ? (detail[0] as { loc?: unknown[]; msg?: string } | undefined) : undefined;
+  if (first?.msg) return `${first.loc?.slice(-1)[0] ?? "Input"}: ${first.msg}`;
+  if (status === 429) return "Too many requests — please wait a minute.";
+  return "Something went wrong. Please try again.";
 }
 
 const post = <T,>(path: string, data: unknown) =>

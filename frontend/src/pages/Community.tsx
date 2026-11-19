@@ -3,14 +3,15 @@ import { api } from "../api";
 import { Btn, Card, NeedPlace } from "../components";
 import { useApp } from "../store";
 
-const CATS: [string, string][] = [
-  ["waste_burning", "🔥 Garbage burning"], ["crop_burning", "🌾 Crop/leaf burning"], ["construction_dust", "🏗️ Construction dust"],
-  ["industrial_smoke", "🏭 Factory smoke"], ["vehicle_smoke", "💨 Smoky vehicle"], ["traffic_jam", "🚗 Traffic jam"], ["other", "❓ Other"],
+const CATS: [string, string, string][] = [
+  ["waste_burning", "🔥 Garbage burning", "🔥 कचरा जलाना"], ["crop_burning", "🌾 Crop/leaf burning", "🌾 फसल/पत्ते जलाना"],
+  ["construction_dust", "🏗️ Construction dust", "🏗️ निर्माण की धूल"], ["industrial_smoke", "🏭 Factory smoke", "🏭 फ़ैक्ट्री का धुआँ"],
+  ["vehicle_smoke", "💨 Smoky vehicle", "💨 धुआँ छोड़ता वाहन"], ["traffic_jam", "🚗 Traffic jam", "🚗 ट्रैफ़िक जाम"], ["other", "❓ Other", "❓ अन्य"],
 ];
-const catLabel = (c: string) => CATS.find((x) => x[0] === c)?.[1] ?? c;
 
 export default function Community() {
-  const { t, lang, place, ai } = useApp();
+  const { t, tx, lang, place, ai } = useApp();
+  const catLabel = (c: string) => { const r = CATS.find((x) => x[0] === c); return r ? (lang === "hi" ? r[2] : r[1]) : c; };
   const [reports, setReports] = useState<any[]>([]);
   const [cat, setCat] = useState("waste_burning");
   const [desc, setDesc] = useState("");
@@ -27,16 +28,22 @@ export default function Community() {
   const head = <div className="page-head"><h2>{t("community_title")}</h2><p>{t("community_sub")}</p></div>;
   if (!place) return <div className="page">{head}<NeedPlace /></div>;
 
-  const onPhoto = async (file?: File) => {
+  const onPhoto = async (input: HTMLInputElement) => {
+    const file = input.files?.[0];
+    input.value = ""; // allow choosing the same photo again
     if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { setAiNote(t("photo_too_big")); return; }
     setAiBusy(true); setAiNote(null);
     try {
       const r = await api.analyzePhoto(file, lang);
       if (r.category === "not_pollution") {
-        setAiNote("AI could not see a pollution source in this photo.");
+        setAiNote(tx("AI could not see a pollution source in this photo.", "AI को इस फ़ोटो में प्रदूषण का स्रोत नहीं दिखा।"));
       } else {
-        setCat(r.category); setDesc(r.suggested_description); setAiUsed(true);
-        setAiNote(`AI saw: ${r.visible_signs.join(", ")} · severity ${r.severity} · confidence ${r.confidence}. ${r.note}`);
+        setCat(r.category);
+        // Keep the AI text within the report rules (≤500 chars, no links) so submitting it can't fail.
+        setDesc(String(r.suggested_description ?? "").replace(/https?:\/\/\S+|www\.\S+/gi, "").replace(/<[^>]*>/g, "").slice(0, 500).trim());
+        setAiUsed(true);
+        setAiNote(`${tx("AI saw", "AI ने देखा")}: ${r.visible_signs.join(", ")} · ${tx("severity", "गंभीरता")} ${r.severity} · ${tx("confidence", "भरोसा")} ${r.confidence}. ${r.note}`);
       }
     } catch (e) { setAiNote((e as Error).message); } finally { setAiBusy(false); }
   };
@@ -46,15 +53,20 @@ export default function Community() {
     try {
       await api.addReport({ category: cat, description: desc, lat: place.lat, lon: place.lon, ai_assisted: aiUsed });
       setDesc(""); setAiUsed(false); setAiNote(null);
-      setMsg({ kind: "ok", text: "✅ Thanks! Your report is live for neighbours to confirm." });
+      setMsg({ kind: "ok", text: tx("✅ Thanks! Your report is live for neighbours to confirm.", "✅ धन्यवाद! आपकी रिपोर्ट पड़ोसियों की पुष्टि के लिए दिख रही है।") });
       load();
     } catch (e) { setMsg({ kind: "warn", text: (e as Error).message }); } finally { setBusy(false); }
   };
 
   const confirm = async (id: number) => {
-    const r = await api.confirmReport(id);
-    setConfirmed((c) => [...c, id]);
-    setReports((rs) => rs.map((x) => (x.id === id ? r : x)));
+    setConfirmed((c) => [...c, id]); // disable at once so double-clicks don't double-count
+    try {
+      const r = await api.confirmReport(id);
+      setReports((rs) => rs.map((x) => (x.id === id ? r : x)));
+    } catch (e) {
+      setConfirmed((c) => c.filter((x) => x !== id));
+      setMsg({ kind: "warn", text: (e as Error).message });
+    }
   };
 
   return (
@@ -64,12 +76,12 @@ export default function Community() {
         <Card span={5} title="📣">
           <div className="stack">
             <div className="field">{t("category")}
-              <div className="chips">{CATS.map(([k, v]) => <button key={k} className="chip" aria-pressed={cat === k} onClick={() => setCat(k)}>{v}</button>)}</div>
+              <div className="chips">{CATS.map(([k]) => <button key={k} className="chip" aria-pressed={cat === k} onClick={() => setCat(k)}>{catLabel(k)}</button>)}</div>
             </div>
             <label className="field">{t("description")}
-              <textarea rows={3} maxLength={500} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Pile of garbage burning behind the market since morning" /></label>
-            <label className="field">📷 {t("photo")}{!ai && " — AI key not set"}
-              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={aiBusy || !ai} onChange={(e) => onPhoto(e.target.files?.[0])} /></label>
+              <textarea rows={3} maxLength={500} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={tx("e.g. Pile of garbage burning behind the market since morning", "जैसे: सुबह से बाज़ार के पीछे कचरे का ढेर जल रहा है")} /></label>
+            <label className="field">📷 {t("photo")}{!ai && tx(" — AI key not set", " — AI कुंजी सेट नहीं")}
+              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={aiBusy || !ai} onChange={(e) => onPhoto(e.currentTarget)} /></label>
             {aiBusy && <div className="skeleton" />}
             {aiNote && <div className="notice info">{aiNote}</div>}
             <Btn busy={busy} onClick={submit} disabled={desc.trim().length < 5}>{t("submit_report")}</Btn>
@@ -84,7 +96,7 @@ export default function Community() {
                 <div key={r.id} className="member" style={{ animation: `rise-in .4s ${i * 50}ms both` }}>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <b>{catLabel(r.category)}</b>
-                    <span className={`tag`}>{r.status === "confirmed" ? "✅ confirmed" : "⏳ unverified"}{r.ai_assisted ? " · AI" : ""}</span>
+                    <span className={`tag`}>{r.status === "confirmed" ? tx("✅ confirmed", "✅ पुष्टि हुई") : tx("⏳ unverified", "⏳ पुष्टि बाकी")}{r.ai_assisted ? " · AI" : ""}</span>
                   </div>
                   <p style={{ margin: "6px 0" }}>{r.description}</p>
                   <div className="row small muted" style={{ justifyContent: "space-between" }}>

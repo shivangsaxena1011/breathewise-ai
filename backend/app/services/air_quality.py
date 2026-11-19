@@ -7,12 +7,13 @@ so the UI never presents it as a ground-station measurement.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from statistics import mean
 from typing import Any
 
 import httpx
 
+from ..config import settings
 from . import aqi as aqi_math
 from .cache import TTLCache
 
@@ -29,7 +30,7 @@ SOURCE = {
             "Local hotspots (busy roads, burning) can be much worse.",
 }
 
-_cache = TTLCache(ttl_seconds=600)
+_cache = TTLCache(ttl_seconds=settings.air_cache_seconds)
 
 
 class UpstreamError(RuntimeError):
@@ -79,7 +80,7 @@ def _window_mean(series: list[float | None], end: int, hours: int) -> float | No
     return round(mean(values), 1)
 
 
-def _current_index(times: list[str], current_time: str | None) -> int:
+def _current_index(times: list[str], current_time: str | None, utc_offset_seconds: int | None = None) -> int:
     if current_time and current_time in times:
         return times.index(current_time)
     if current_time:
@@ -87,7 +88,10 @@ def _current_index(times: list[str], current_time: str | None) -> int:
         for i, t in enumerate(times):
             if t.startswith(prefix):
                 return i
-    return 0
+    # No usable "current" block: use the last hour at or before the location's local time now.
+    local_now = (datetime.now(UTC) + timedelta(seconds=utc_offset_seconds or 0)).strftime("%Y-%m-%dT%H:00")
+    past = [i for i, t in enumerate(times) if t <= local_now]
+    return past[-1] if past else 0
 
 
 def _smog_drivers(weather_now: dict[str, Any]) -> list[dict[str, str]]:
@@ -100,7 +104,8 @@ def _smog_drivers(weather_now: dict[str, Any]) -> list[dict[str, str]]:
     if wind is not None and wind < 6:
         drivers.append({"key": "low_wind", "text": f"Low wind ({wind:.0f} km/h) — pollution is not being blown away."})
     if blh is not None and blh < 400:
-        drivers.append({"key": "low_mixing", "text": f"Shallow mixing layer (~{blh:.0f} m) — smoke and dust are trapped near the ground."})
+        drivers.append({"key": "low_mixing",
+                        "text": f"Shallow mixing layer (~{blh:.0f} m) — smoke and dust are trapped near the ground."})
     if rh is not None and rh > 80 and temp is not None and temp < 18:
         drivers.append({"key": "fog", "text": "Cold, humid air — fog can mix with smoke to form dense smog."})
     return drivers
@@ -109,7 +114,7 @@ def _smog_drivers(weather_now: dict[str, Any]) -> list[dict[str, str]]:
 def _window(hours: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
     """Cleanest and dirtiest consecutive 2-hour daytime (6:00–21:00) windows within `hours`."""
     day = [h for h in hours if h["pm2_5"] is not None and 6 <= int(h["time"][11:13]) <= 20]
-    pairs = [(a, b) for a, b in zip(day, day[1:]) if b["time"][:10] == a["time"][:10]
+    pairs = [(a, b) for a, b in zip(day, day[1:], strict=False) if b["time"][:10] == a["time"][:10]
              and int(b["time"][11:13]) == int(a["time"][11:13]) + 1]
     if not pairs:
         return None
@@ -141,7 +146,7 @@ def build_snapshot(air: dict[str, Any], weather: dict[str, Any] | None) -> dict[
     if not times:
         raise UpstreamError("No hourly air-quality data for this location")
     current = air.get("current") or {}
-    idx = _current_index(times, current.get("time"))
+    idx = _current_index(times, current.get("time"), air.get("utc_offset_seconds"))
 
     series = {p: hourly_raw.get(p) or [None] * len(times) for p in POLLUTANTS}
     us_series = hourly_raw.get("us_aqi") or [None] * len(times)
@@ -251,7 +256,11 @@ async def get_area_grid(client: httpx.AsyncClient, lat: float, lon: float, step:
     if (hit := _cache.get(key)) is not None:
         return hit
     offsets = [-2, -1, 0, 1, 2]
-    pts = [(round(lat + dy * step, 3), round(lon + dx * step, 3)) for dy in offsets for dx in offsets]
+    def wrap(x: float) -> float:
+        return ((x + 180) % 360) - 180
+
+    pts = [(round(max(-89.9, min(89.9, lat + dy * step)), 3), round(wrap(lon + dx * step), 3))
+           for dy in offsets for dx in offsets]
     data = await _get_json(client, AIR_URL, {
         "latitude": ",".join(str(p[0]) for p in pts),
         "longitude": ",".join(str(p[1]) for p in pts),
@@ -260,7 +269,7 @@ async def get_area_grid(client: httpx.AsyncClient, lat: float, lon: float, step:
     })
     items = data if isinstance(data, list) else [data]
     cells = []
-    for (plat, plon), item in zip(pts, items):
+    for (plat, plon), item in zip(pts, items, strict=False):
         cur = (item or {}).get("current") or {}
         pm25 = cur.get("pm2_5")
         level = aqi_math.pm25_level(pm25)

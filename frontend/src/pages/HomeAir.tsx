@@ -3,11 +3,13 @@ import { api, fmtHour, type Home } from "../api";
 import { ActionList, Btn, Card, NeedPlace } from "../components";
 import { useApp } from "../store";
 
-const ROOMS: [string, string][] = [["living", "🛋️ Living"], ["bedroom", "🛏️ Bedroom"], ["kitchen", "🍳 Kitchen"], ["kids", "🧸 Kids"], ["study", "📚 Study"], ["bathroom", "🚿 Bath"]];
+const ROOMS: [string, string, string][] = [["living", "🛋️ Living", "🛋️ बैठक"], ["bedroom", "🛏️ Bedroom", "🛏️ शयनकक्ष"],
+  ["kitchen", "🍳 Kitchen", "🍳 रसोई"], ["kids", "🧸 Kids", "🧸 बच्चों का कमरा"], ["study", "📚 Study", "📚 पढ़ाई"], ["bathroom", "🚿 Bath", "🚿 बाथरूम"]];
 const VERDICT = { open: ["🪟", "ok"], brief: ["⏱️", "info"], closed: ["🔒", "warn"] } as const;
 
 export default function HomeAir() {
-  const { t, lang, place, household, setHousehold } = useApp();
+  const { t, tx, lang, place, household, setHousehold } = useApp();
+  const roomLabel = (k: string) => { const r = ROOMS.find((x) => x[0] === k); return r ? (lang === "hi" ? r[2] : r[1]) : k; };
   const [rooms, setRooms] = useState<Record<string, number>>({ living: 16, bedroom: 12, kitchen: 8 });
   const [res, setRes] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -43,16 +45,16 @@ export default function HomeAir() {
             <label className="check"><input type="checkbox" checked={home.has_pets} onChange={(e) => setHome({ has_pets: e.target.checked })} />{t("pets")}</label>
             <label className="field">{t("fuel")}
               <select value={home.cooking_fuel} onChange={(e) => setHome({ cooking_fuel: e.target.value as Home["cooking_fuel"] })}>
-                <option value="lpg">LPG</option><option value="png">Piped gas (PNG)</option><option value="induction">Induction / electric</option>
-                <option value="biomass">Wood / dung / coal</option><option value="kerosene">Kerosene</option>
+                <option value="lpg">LPG</option><option value="png">{tx("Piped gas (PNG)", "पाइप गैस (PNG)")}</option><option value="induction">{tx("Induction / electric", "इंडक्शन / बिजली")}</option>
+                <option value="biomass">{tx("Wood / dung / coal", "लकड़ी / उपले / कोयला")}</option><option value="kerosene">{tx("Kerosene", "मिट्टी का तेल")}</option>
               </select></label>
             <div className="field">{t("rooms")}
               <div className="chips">
-                {ROOMS.map(([k, v]) => <button key={k} className="chip" aria-pressed={k in rooms} onClick={() => toggleRoom(k)}>{v}</button>)}
+                {ROOMS.map(([k]) => <button key={k} className="chip" aria-pressed={k in rooms} onClick={() => toggleRoom(k)}>{roomLabel(k)}</button>)}
               </div>
             </div>
             {Object.keys(rooms).map((k) => (
-              <label key={k} className="field">{ROOMS.find((r) => r[0] === k)?.[1]} — {rooms[k]} m²
+              <label key={k} className="field">{roomLabel(k)} — {rooms[k]} m²
                 <input type="range" min={4} max={40} value={rooms[k]} onChange={(e) => setRooms({ ...rooms, [k]: +e.target.value })} />
               </label>
             ))}
@@ -75,7 +77,7 @@ export default function HomeAir() {
             </section>
             {res.rooms.map((r: any, i: number) => (
               <section key={r.kind} className="card" style={{ animationDelay: `${i * 80}ms` }}>
-                <h3>{ROOMS.find((x) => x[0] === r.kind)?.[1]}</h3>
+                <h3>{roomLabel(r.kind)}</h3>
                 <ActionList items={r.tips.map((x: any) => ({ ...x, priority: "medium" }))} />
                 <p className="small muted" style={{ marginBottom: 0 }}>💨 {t("purifier_need")}: <b>{r.purifier.cadr_m3h} m³/h</b> (~{r.purifier.cadr_cfm} CFM) · {r.purifier.basis}</p>
               </section>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fmtHour, LEVEL_COLORS } from "../api";
-import { AqiRing, aqiLabel, Btn, Card, CitySearch, ForecastBars } from "../components";
+import { AqiRing, aqiLabel, Btn, Card, CitySearch, ForecastBars, NumInput } from "../components";
+import { AQI_HEALTH_HI } from "../i18n";
 import { useApp } from "../store";
 
 function localInput(offsetHours: number) {
@@ -10,9 +11,22 @@ function localInput(offsetHours: number) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
 
+/** Android Chrome forbids `new Notification()`; use the service worker when there is one. Never let this break the check. */
+function notify(body: string) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const opts = { body, icon: "/logo.svg" };
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((r) => r.showNotification("BreatheWise", opts)).catch(() => {});
+    } else {
+      new Notification("BreatheWise", opts);
+    }
+  } catch { /* notifications are a bonus; the on-page alert already shows the message */ }
+}
+
 function Guardian() {
-  const { t, place, household } = useApp();
-  const [title, setTitle] = useState("Evening walk");
+  const { t, tx, place, household } = useApp();
+  const [title, setTitle] = useState(() => tx("Evening walk", "शाम की सैर"));
   const [start, setStart] = useState(() => localInput(3));
   const [mins, setMins] = useState(45);
   const [sensitive, setSensitive] = useState(false);
@@ -27,9 +41,7 @@ function Guardian() {
       const r = await api.alerts(place, [{ title, start, duration_min: mins, sensitive }], household);
       setRes(r.alerts);
       const a = r.alerts[0];
-      if (a?.status === "warn" && "Notification" in window && Notification.permission === "granted") {
-        new Notification("BreatheWise", { body: a.message, icon: "/logo.svg" });
-      }
+      if (a?.status === "warn") notify(a.message);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -40,13 +52,13 @@ function Guardian() {
         <label className="field">{t("activity")}<input type="text" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} /></label>
         <div className="row">
           <label className="field" style={{ flex: 2 }}>{t("when")}<input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-          <label className="field" style={{ flex: 1 }}>{t("minutes")}<input type="number" min={5} max={720} value={mins} onChange={(e) => setMins(+e.target.value || 30)} /></label>
+          <label className="field" style={{ flex: 1 }}>{t("minutes")}<NumInput min={5} max={720} value={mins} onChange={setMins} /></label>
         </div>
         <label className="check"><input type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />{t("sensitive")}</label>
         <div className="row">
           <Btn busy={busy} onClick={run} disabled={!title.trim()}>{t("check")}</Btn>
           {"Notification" in window && Notification.permission === "default" && (
-            <button className="btn ghost small" onClick={() => Notification.requestPermission()}>🔔 Alerts</button>
+            <button className="btn ghost small" onClick={() => Notification.requestPermission()}>🔔 {t("alerts_btn")}</button>
           )}
         </div>
         {err && <div className="notice warn" role="alert">{err}</div>}
@@ -62,19 +74,21 @@ function Guardian() {
 }
 
 function AreaGrid() {
-  const { t, place } = useApp();
+  const { t, tx, place } = useApp();
   const [cells, setCells] = useState<any[] | null>(null);
   useEffect(() => {
     if (!place) return;
     setCells(null);
-    api.grid(place).then((g) => setCells(g.cells)).catch(() => setCells([]));
+    let stale = false; // a slow response for the previous city must not overwrite this one
+    api.grid(place).then((g) => { if (!stale) setCells(g.cells); }).catch(() => { if (!stale) setCells([]); });
+    return () => { stale = true; };
   }, [place]);
   return (
-    <Card title={t("area")} icon="🗺️" span={4}>
+    <Card title={t("area")} icon="🗺️" span={7}>
       {!cells ? <div className="skeleton" style={{ height: 200 }} /> : cells.length === 0 ? <p className="muted">—</p> : (
         <>
           <div className="heat" role="img" aria-label="PM2.5 around you on a 5 by 5 model grid">
-            <span className="sr-only">North is up.</span>
+            <span className="sr-only">{tx("North is up.", "ऊपर उत्तर दिशा है।")}</span>
             {[...cells].reverse().reduce<any[][]>((rows, c, i) => { (rows[Math.floor(i / 5)] ||= []).unshift(c); return rows; }, [])
               .flat().map((c, i) => (
                 <div key={i} className={i === 12 ? "me" : ""} style={{ background: c.color, animationDelay: `${i * 30}ms` }}
@@ -90,6 +104,8 @@ function AreaGrid() {
 
 export default function Today() {
   const { t, lang, place, setPlace, snap, loading, error, offlineSince, refresh } = useApp();
+  // Label an hour with "tomorrow" when it falls on a later date than the current reading.
+  const when = (iso: string) => `${fmtHour(iso)}${snap && iso.slice(0, 10) !== snap.observed_at.slice(0, 10) ? ` (${t("tomorrow")})` : ""}`;
 
   useEffect(() => {
     if (snap?.aqi.color) document.documentElement.style.setProperty("--aqi", snap.aqi.color);
@@ -129,10 +145,10 @@ export default function Today() {
             <div style={{ position: "relative" }}>
               <div className="row">
                 <span className="badge">{aqiLabel(snap.aqi.label, lang)}</span>
-                <span className="tag" title={snap.source.note}>📡 {t("estimated")}</span>
+                <span className="tag" title={t("estimate_note")}>📡 {t("estimated")}</span>
               </div>
               <h2>📍 {place.name}</h2>
-              <p style={{ margin: "4px 0 10px" }}>{snap.aqi.health}</p>
+              <p style={{ margin: "4px 0 10px" }}>{lang === "hi" && snap.aqi.category ? AQI_HEALTH_HI[snap.aqi.category] ?? snap.aqi.health : snap.aqi.health}</p>
               <div className="small muted">
                 {t("dominant")}: <b>{snap.aqi.dominant ?? "—"}</b> · US AQI {snap.aqi.us_aqi ?? "—"} · {t("updated")} {fmtHour(snap.observed_at)}
                 {" "}({snap.location.timezone})
@@ -146,12 +162,12 @@ export default function Today() {
               <div className="windows" style={{ marginTop: 14 }}>
                 <div className="win">
                   <div className="small muted">🌤️ {t("best_time")}</div>
-                  <div className="t">{fmtHour(today.best.start)}</div>
+                  <div className="t">{when(today.best.start)}</div>
                   <div className="small"><span className="dot" style={{ background: LEVEL_COLORS[today.best.level] }} /> PM2.5 ≈ {today.best.pm2_5}</div>
                 </div>
                 <div className="win">
                   <div className="small muted">🌫️ {t("worst_time")}</div>
-                  <div className="t">{fmtHour(today.worst.start)}</div>
+                  <div className="t">{when(today.worst.start)}</div>
                   <div className="small"><span className="dot" style={{ background: LEVEL_COLORS[today.worst.level] }} /> PM2.5 ≈ {today.worst.pm2_5}</div>
                 </div>
               </div>
@@ -175,9 +191,6 @@ export default function Today() {
 
           <Guardian />
           <AreaGrid />
-          <Card span={3} title="ℹ️" className="small">
-            <p className="muted" style={{ margin: 0 }}>{snap.source.note} <a href={snap.source.url} target="_blank" rel="noreferrer">Open-Meteo / CAMS</a></p>
-          </Card>
         </div>
       )}
     </div>

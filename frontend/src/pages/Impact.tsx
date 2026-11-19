@@ -1,27 +1,33 @@
 import { useMemo, useState } from "react";
 import { api, fmtHour, type Mode } from "../api";
-import { Assumptions, Btn, Card } from "../components";
+import { Assumptions, Btn, Card, NumInput } from "../components";
+import { CHALLENGES, challengeProgress, logLabel, QUICK, weekStats } from "../eco";
 import { useApp } from "../store";
-import { MODES } from "./Family";
+import { MODES, modeLabel } from "./Family";
 import { Markdown } from "../Chat";
 
-const label = (m: string) => MODES.find((x) => x[0] === m)?.[1] ?? m;
 
 function TripCompare() {
-  const { t } = useApp();
+  const { t, tx, lang } = useApp();
+  const label = (m: string) => modeLabel(m, lang);
   const [km, setKm] = useState(10);
   const [people, setPeople] = useState(1);
   const [res, setRes] = useState<any>(null);
   const [busy, setBusy] = useState(false);
-  const run = async () => { setBusy(true); try { setRes(await api.mobility(km, people)); } finally { setBusy(false); } };
+  const [err, setErr] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true); setErr(null);
+    try { setRes(await api.mobility(km, people)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
   const max = res ? Math.max(...res.rows.map((r: any) => r.kg_co2_per_person), 0.001) : 1;
   return (
-    <Card title="Green Mobility" icon="🚦" span={6}>
+    <Card title={tx("Green Mobility", "ग्रीन मोबिलिटी")} icon="🚦" span={6}>
       <div className="row">
-        <label className="field" style={{ flex: 1 }}>{t("trip_km")}<input type="number" min={1} max={500} value={km} onChange={(e) => setKm(+e.target.value || 1)} /></label>
-        <label className="field" style={{ flex: 1 }}>{t("people")}<input type="number" min={1} max={8} value={people} onChange={(e) => setPeople(+e.target.value || 1)} /></label>
+        <label className="field" style={{ flex: 1 }}>{t("trip_km")}<NumInput min={1} max={500} value={km} onChange={setKm} /></label>
+        <label className="field" style={{ flex: 1 }}>{t("people")}<NumInput min={1} max={8} value={people} onChange={setPeople} /></label>
         <Btn busy={busy} onClick={run} style={{ alignSelf: "end" }}>{t("compare")}</Btn>
       </div>
+      {err && <div className="notice warn" role="alert" style={{ marginTop: 10 }}>{err}</div>}
       {res && (
         <div style={{ marginTop: 12 }} aria-live="polite">
           {res.rows.map((r: any, i: number) => (
@@ -42,7 +48,7 @@ function TripCompare() {
 }
 
 function WhatIf() {
-  const { t, lang, place, ai } = useApp();
+  const { t, tx, lang, place, ai } = useApp();
   const [from, setFrom] = useState<Mode>("car_petrol");
   const [to, setTo] = useState<Mode>("metro");
   const [km, setKm] = useState(8);
@@ -71,19 +77,19 @@ function WhatIf() {
     <Card title={t("whatif")} icon="🔮" span={6}>
       <div className="stack">
         <div className="row">
-          <label className="field" style={{ flex: 1 }}>{t("from")}<select value={from} onChange={(e) => setFrom(e.target.value as Mode)}>{MODES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label className="field" style={{ flex: 1 }}>{t("to")}<select value={to} onChange={(e) => setTo(e.target.value as Mode)}>{MODES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <label className="field" style={{ flex: 1 }}>{t("from")}<select value={from} onChange={(e) => setFrom(e.target.value as Mode)}>{MODES.map(([k]) => <option key={k} value={k}>{modeLabel(k, lang)}</option>)}</select></label>
+          <label className="field" style={{ flex: 1 }}>{t("to")}<select value={to} onChange={(e) => setTo(e.target.value as Mode)}>{MODES.map(([k]) => <option key={k} value={k}>{modeLabel(k, lang)}</option>)}</select></label>
         </div>
         <div className="row">
-          <label className="field" style={{ flex: 1 }}>{t("km_one_way")}<input type="number" min={1} max={200} value={km} onChange={(e) => setKm(+e.target.value || 1)} /></label>
+          <label className="field" style={{ flex: 1 }}>{t("km_one_way")}<NumInput min={1} max={200} value={km} onChange={setKm} /></label>
           <label className="field" style={{ flex: 1 }}>{t("days_week")} ({days})<input type="range" min={1} max={7} value={days} onChange={(e) => setDays(+e.target.value)} /></label>
         </div>
         <div className="row">
           <label className="field" style={{ flex: 1 }}>{t("exercise_at")}<select value={hour} onChange={(e) => setHour(+e.target.value)} disabled={!place}>
             {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{fmtHour(`0000-00-00T${String(h).padStart(2, "0")}`)}</option>)}</select></label>
-          <label className="field" style={{ flex: 1 }}>🔥 kg waste/leaves burned per week<input type="number" min={0} max={200} value={waste} onChange={(e) => setWaste(+e.target.value || 0)} /></label>
+          <label className="field" style={{ flex: 1 }}>🔥 {tx("kg waste/leaves burned per week", "हर सप्ताह जलाया कचरा/पत्ते (किग्रा)")}<NumInput min={0} max={200} value={waste} onChange={setWaste} /></label>
         </div>
-        <label className="field">⚡ kWh electricity saved per month<input type="number" min={0} max={2000} value={kwh} onChange={(e) => setKwh(+e.target.value || 0)} /></label>
+        <label className="field">⚡ {tx("kWh electricity saved per month", "हर महीने बचाई बिजली (kWh)")}<NumInput min={0} max={2000} value={kwh} onChange={setKwh} /></label>
         <div className="row">
           <Btn busy={busy} onClick={() => run(false)}>{t("run_whatif")}</Btn>
           {ai && <button className="btn ghost" disabled={busy} onClick={() => run(true)}>✨ {t("explain_ai")}</button>}
@@ -92,11 +98,13 @@ function WhatIf() {
         {r && (
           <div className="stack" aria-live="polite">
             <div className="row">
-              <div className="stat" style={{ flex: 1 }}><b>{r.mode_shift.kg_co2_saved_year}</b><span className="small muted">kg CO₂ / year</span></div>
-              {r.exercise_shift?.available && <div className="stat" style={{ flex: 1 }}><b>−{r.exercise_shift.dose_reduction_pct}%</b>
-                <span className="small muted">PM2.5 inhaled if you exercise at {fmtHour(r.exercise_shift.best.time)}</span></div>}
-              {r.waste_burning && <div className="stat" style={{ flex: 1 }}><b>{r.waste_burning.pm25_g_avoided_year} g</b><span className="small muted">PM2.5 smoke / year</span></div>}
-              {r.energy_saving && <div className="stat" style={{ flex: 1 }}><b>{r.energy_saving.kg_co2_saved_year}</b><span className="small muted">kg CO₂ / year (power)</span></div>}
+              <div className="stat" style={{ flex: 1 }}><b>{r.mode_shift.kg_co2_saved_year}</b><span className="small muted">{tx("kg CO₂ / year", "किग्रा CO₂ / वर्ष")}</span></div>
+              {r.exercise_shift?.available && (r.exercise_shift.dose_reduction_pct > 0
+                ? <div className="stat" style={{ flex: 1 }}><b>−{r.exercise_shift.dose_reduction_pct}%</b>
+                    <span className="small muted">{t("dose_if_at")} {fmtHour(r.exercise_shift.best.time)}</span></div>
+                : <div className="stat" style={{ flex: 1 }}><b>✓</b><span className="small muted">{t("already_cleanest")}</span></div>)}
+              {r.waste_burning && <div className="stat" style={{ flex: 1 }}><b>{r.waste_burning.pm25_g_avoided_year} g</b><span className="small muted">{tx("PM2.5 smoke / year", "PM2.5 धुआँ / वर्ष")}</span></div>}
+              {r.energy_saving && <div className="stat" style={{ flex: 1 }}><b>{r.energy_saving.kg_co2_saved_year}</b><span className="small muted">{tx("kg CO₂ / year (power)", "किग्रा CO₂ / वर्ष (बिजली)")}</span></div>}
             </div>
             {res.explanation && <div className="notice ok" style={{ display: "block" }}>✨ <Markdown text={res.explanation} /></div>}
             <Assumptions items={[...r.mode_shift.assumptions, ...(r.exercise_shift?.assumptions ?? []),
@@ -109,34 +117,9 @@ function WhatIf() {
   );
 }
 
-const QUICK = [
-  { label: "🚇 Metro/bus instead of car (10 km)", kg: +(10 * (2.31 / 15 - 0.03)).toFixed(2) },
-  { label: "🚲 Cycled/walked a 3 km errand", kg: +(3 * 2.31 / 45).toFixed(2) },
-  { label: "🤝 Carpooled (3 people, 15 km)", kg: +(15 * 2.31 / 15 * (2 / 3)).toFixed(2) },
-  { label: "🚦 Switched off engine at signals", kg: 0.1 },
-  { label: "🍂 Composted leaves instead of burning", kg: 0 },
-  { label: "💡 Saved 2 kWh electricity", kg: +(2 * 0.72).toFixed(2) },
-];
-const CHALLENGES = [
-  { id: "car-free", title: "🚇 3 car-free commutes", need: 3, match: (l: string) => /Metro|Cycled|Carpool/.test(l) },
-  { id: "no-burn", title: "🍂 Zero burning week", need: 1, match: (l: string) => l.includes("Composted") },
-  { id: "idle", title: "🚦 5 idle-free signals", need: 5, match: (l: string) => l.includes("engine") },
-];
-
 function Tracker() {
-  const { t, logs, addLog, removeLog } = useApp();
-  const stats = useMemo(() => {
-    const today = new Date();
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today); d.setDate(today.getDate() - (6 - i));
-      const key = d.toISOString().slice(0, 10);
-      return { key, day: d.toLocaleDateString(undefined, { weekday: "narrow" }), kg: logs.filter((l) => l.date === key).reduce((s, l) => s + l.kg, 0) };
-    });
-    const weekLogs = logs.filter((l) => l.date >= days[0].key);
-    let streak = 0;
-    for (let i = 6; i >= 0 && logs.some((l) => l.date === days[i].key); i--) streak++;
-    return { days, week: weekLogs.reduce((s, l) => s + l.kg, 0), weekLogs, streak };
-  }, [logs]);
+  const { t, tx, lang, logs, addLog, removeLog } = useApp();
+  const stats = useMemo(() => weekStats(logs, new Date(), lang === "hi" ? "hi-IN" : "en-IN"), [logs, lang]);
   const max = Math.max(0.5, ...stats.days.map((d) => d.kg));
 
   return (
@@ -145,20 +128,20 @@ function Tracker() {
         <div className="row">
           <div className="stat" style={{ flex: 1 }}><b>{stats.week.toFixed(1)}</b><span className="small muted">{t("saved")} · {t("this_week")}</span></div>
           <div className="stat" style={{ flex: 1 }}><b>{stats.streak}🔥</b><span className="small muted">{t("streak")}</span></div>
-          <div className="stat" style={{ flex: 1 }}><b>{stats.weekLogs.length}</b><span className="small muted">actions</span></div>
+          <div className="stat" style={{ flex: 1 }}><b>{stats.weekLogs.length}</b><span className="small muted">{tx("actions", "कदम")}</span></div>
         </div>
-        <div className="week" style={{ marginTop: 14 }} role="img" aria-label="CO2 saved per day this week">
+        <div className="week" style={{ marginTop: 14 }} role="img" aria-label={tx("CO₂ saved per day this week", "इस सप्ताह रोज़ बचाया CO₂")}>
           {stats.days.map((d, i) => <div key={d.key}><span style={{ height: `${(d.kg / max) * 60}px`, animationDelay: `${i * 60}ms` }} />{d.day}</div>)}
         </div>
         <div className="chips" style={{ marginTop: 14 }}>
-          {QUICK.map((q) => <button key={q.label} className="chip" onClick={() => addLog({ label: q.label, kg: q.kg })}>＋ {q.label}</button>)}
+          {QUICK.map((q) => <button key={q.kind} className="chip" onClick={() => addLog({ label: q.en, kind: q.kind, kg: q.kg })}>＋ {lang === "hi" ? q.hi : q.en}</button>)}
         </div>
         {logs.length > 0 && (
           <ul className="small" style={{ paddingLeft: 0, listStyle: "none", maxHeight: 170, overflowY: "auto" }}>
             {logs.slice(0, 12).map((l) => (
               <li key={l.id} className="row" style={{ justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
-                <span>{l.date} · {l.label}</span>
-                <span className="row"><b>{l.kg} kg</b><button className="chip" aria-label={`Remove ${l.label}`} onClick={() => removeLog(l.id)}>✕</button></span>
+                <span>{l.date} · {logLabel(l, lang)}</span>
+                <span className="row"><b>{l.kg} kg</b><button className="chip" aria-label={`${t("remove")} ${logLabel(l, lang)}`} onClick={() => removeLog(l.id)}>✕</button></span>
               </li>
             ))}
           </ul>
@@ -167,16 +150,15 @@ function Tracker() {
       <Card title={t("challenges")} icon="🏆" span={5}>
         <div className="stack">
           {CHALLENGES.map((c) => {
-            const n = stats.weekLogs.filter((l) => c.match(l.label)).length;
-            const done = n >= c.need;
+            const { count, done, ratio } = challengeProgress(c, stats.weekLogs);
             return (
               <div key={c.id} className="member">
-                <div className="row" style={{ justifyContent: "space-between" }}><b>{c.title}</b><span>{done ? "🏅" : `${Math.min(n, c.need)}/${c.need}`}</span></div>
-                <div className="meter" style={{ marginTop: 8 }}><span style={{ width: `${Math.min(1, n / c.need) * 100}%`, background: "linear-gradient(90deg,var(--accent),var(--brand2))" }} /></div>
+                <div className="row" style={{ justifyContent: "space-between" }}><b>{lang === "hi" ? c.hi : c.en}</b><span>{done ? "🏅" : `${count}/${c.need}`}</span></div>
+                <div className="meter" style={{ marginTop: 8 }}><span style={{ width: `${ratio * 100}%`, background: "linear-gradient(90deg,var(--accent),var(--brand2))" }} /></div>
               </div>
             );
           })}
-          <p className="small muted" style={{ margin: 0 }}>Saved on this device only.</p>
+          <p className="small muted" style={{ margin: 0 }}>{tx("Saved on this device only.", "सिर्फ़ इसी डिवाइस पर सेव है।")}</p>
         </div>
       </Card>
     </>

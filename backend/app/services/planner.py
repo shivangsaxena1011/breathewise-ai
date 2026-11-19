@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from ..schemas import Activity, Household
@@ -16,6 +17,7 @@ def _hour_index(hourly: list[dict[str, Any]]) -> dict[str, int]:
 def alerts(activities: list[Activity], snapshot: dict[str, Any], household: Household | None) -> dict[str, Any]:
     hourly = snapshot["hourly"]
     lookup = _hour_index(hourly)
+    now = snapshot.get("now_index", 0)
     sensitive_household = bool(household and any(
         m.age_group in ("infant", "child", "elderly") or m.conditions for m in household.members))
     out = []
@@ -25,13 +27,17 @@ def alerts(activities: list[Activity], snapshot: dict[str, Any], household: Hous
             out.append({"activity": act.title, "start": act.start, "status": "unknown",
                         "message": "Outside the 3-day forecast range."})
             continue
-        n = max(1, round(act.duration_min / 60))
+        if i < now:
+            out.append({"activity": act.title, "start": act.start, "status": "unknown",
+                        "message": "That time has already passed — pick a time later today or in the next 2 days."})
+            continue
+        n = max(1, math.ceil(act.duration_min / 60))
         vals = [h["pm2_5"] for h in hourly[i:i + n] if h.get("pm2_5") is not None]
         pm = sum(vals) / len(vals) if vals else None
         level = aqi_math.pm25_level(pm)
         threshold = 2 if (act.sensitive or sensitive_household) else 3
         day = act.start[:10]
-        same_day = [j for j, h in enumerate(hourly) if h["time"].startswith(day)
+        same_day = [j for j, h in enumerate(hourly) if j >= now and h["time"].startswith(day)
                     and 6 <= int(h["time"][11:13]) <= 20 and h.get("pm2_5") is not None]
         best_j = min(same_day, key=lambda j: hourly[j]["pm2_5"]) if same_day else None
         item = {"activity": act.title, "start": act.start, "who": act.who,
@@ -66,17 +72,23 @@ def routine(household: Household, snapshot: dict[str, Any], commute_mode: str | 
     exercisers = [m.name for m in household.members if m.exercises_outdoors]
 
     steps: list[dict[str, str]] = [
-        {"time": "06:30", "title": "Check today's air", "detail": "Open BreatheWise and check the cleanest window before planning outdoor time."},
+        {"time": "06:30", "title": "Check today's air",
+         "detail": "Open BreatheWise and check the cleanest window before planning outdoor time."},
     ]
     if exercisers:
         when = _fmt_hour(best)
-        detail = (f"Move exercise indoors (yoga, stretching, stairs)." if level >= 4 else
+        detail = ("Move exercise indoors (yoga, stretching, stairs)." if level >= 4 else
                   f"Best outdoor slot today is around {when}." if level >= 2 else "Air is fine — enjoy outdoor exercise.")
         steps.append({"time": best[11:16] if best and 2 <= level < 4 else "07:00",
                       "title": f"Exercise ({', '.join(exercisers)})", "detail": detail})
-    if commute_mode in ("car_petrol", "car_diesel", "two_wheeler"):
+    if commute_mode in ("car_petrol", "car_diesel", "car_cng", "car_ev", "two_wheeler"):
         steps.append({"time": "08:30", "title": "Commute",
-                      "detail": "Try bus/metro or carpool today; if driving, keep windows up with recirculation on and don't idle."})
+                      "detail": "Try bus/metro or carpool today; if driving, keep windows up with recirculation on "
+                                "and don't idle."})
+    elif commute_mode is None:
+        steps.append({"time": "08:30", "title": "Commute",
+                      "detail": "If you travel today, metro, bus or carpooling cut emissions; prefer quieter streets "
+                                "and wear an N95 if the air is Poor or worse."})
     else:
         steps.append({"time": "08:30", "title": "Commute",
                       "detail": "Great low-emission choice. Prefer quieter streets; wear an N95 if air is Poor or worse."})

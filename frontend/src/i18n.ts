@@ -32,8 +32,18 @@ const en = {
   privacy_note: "We store only the category, text and location rounded to ~100 m. Photos are never saved.",
   chat_title: "Ask BreatheWise", chat_placeholder: "Ask anything… e.g. Is it safe to jog now?", send: "Send",
   speak: "Speak", rules_mode: "Offline answer (AI key not set)", offline: "Offline — showing last saved data from",
-  disclaimer: "General guidance, not medical advice. Air data is a model estimate from CAMS via Open-Meteo.",
+  disclaimer: "General guidance, not medical advice. Air-quality figures are model-based estimates.",
+  estimate_note: "Estimated from an atmospheric model, not a ground-station reading. Busy roads and burning sites can be worse.",
   pick_city_first: "Pick a city on the Today tab first.",
+  no_city: "No matching place found — try another spelling.",
+  no_geo: "Location is not available in this browser.",
+  geo_denied: "Location permission denied — search a city instead.",
+  dose_if_at: "less PM2.5 inhaled if you exercise at",
+  already_cleanest: "You already exercise at the cleanest time.",
+  photo_too_big: "Photo too large (max 4 MB).",
+  tomorrow: "tomorrow",
+  alerts_btn: "Enable alerts",
+  remove: "Remove",
 };
 
 export type Key = keyof typeof en;
@@ -70,8 +80,28 @@ const hi: Record<Key, string> = {
   privacy_note: "हम केवल श्रेणी, विवरण और ~100 मीटर तक गोल की गई लोकेशन रखते हैं। फ़ोटो कभी सेव नहीं होती।",
   chat_title: "BreatheWise से पूछें", chat_placeholder: "कुछ भी पूछें… जैसे: क्या अभी दौड़ना ठीक है?", send: "भेजें",
   speak: "बोलें", rules_mode: "ऑफ़लाइन उत्तर (AI कुंजी सेट नहीं)", offline: "ऑफ़लाइन — पिछला सेव डेटा:",
-  disclaimer: "सामान्य मार्गदर्शन, चिकित्सा सलाह नहीं। हवा का डेटा CAMS (Open-Meteo) का मॉडल अनुमान है।",
+  disclaimer: "सामान्य मार्गदर्शन, चिकित्सा सलाह नहीं। वायु गुणवत्ता के आँकड़े मॉडल पर आधारित अनुमान हैं।",
+  estimate_note: "यह वायुमंडलीय मॉडल का अनुमान है, किसी मॉनिटरिंग स्टेशन की रीडिंग नहीं। व्यस्त सड़कों और जलने वाली जगहों पर हवा और ख़राब हो सकती है।",
   pick_city_first: "पहले 'आज' टैब पर शहर चुनें।",
+  no_city: "कोई जगह नहीं मिली — दूसरी वर्तनी आज़माएँ।",
+  no_geo: "इस ब्राउज़र में लोकेशन उपलब्ध नहीं है।",
+  geo_denied: "लोकेशन की अनुमति नहीं मिली — शहर खोजें।",
+  dose_if_at: "कम PM2.5 साँस में, अगर व्यायाम का समय हो",
+  already_cleanest: "आप पहले से सबसे साफ़ समय पर व्यायाम करते हैं।",
+  photo_too_big: "फ़ोटो बहुत बड़ी है (अधिकतम 4 MB)।",
+  tomorrow: "कल",
+  alerts_btn: "अलर्ट चालू करें",
+  remove: "हटाएँ",
+};
+
+/** Hindi version of the CPCB health statement for each AQI category. */
+export const AQI_HEALTH_HI: Record<string, string> = {
+  good: "न्यूनतम प्रभाव।",
+  satisfactory: "संवेदनशील लोगों को साँस लेने में हल्की तकलीफ़ हो सकती है।",
+  moderate: "फेफड़े या दिल की बीमारी वाले लोगों, बच्चों और बुज़ुर्गों को साँस लेने में तकलीफ़।",
+  poor: "लंबे समय तक रहने पर ज़्यादातर लोगों को साँस लेने में तकलीफ़।",
+  very_poor: "लंबे समय तक रहने पर साँस की बीमारी हो सकती है।",
+  severe: "स्वस्थ लोगों पर भी असर, और बीमार लोगों पर गंभीर असर।",
 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { en, hi };

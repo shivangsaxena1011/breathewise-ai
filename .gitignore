@@ -11,3 +11,6 @@ backend/data/
 
 .env*
 !.env.example
+.coverage
+coverage/
+.ruff_cache/

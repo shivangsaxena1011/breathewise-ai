@@ -62,11 +62,12 @@ export function AqiRing({ value, label }: { value: number | null; label: string 
 }
 
 export function ForecastBars({ hours, nowIndex }: { hours: Hour[]; nowIndex: number }) {
+  const { tx } = useApp();
   const slice = hours.slice(nowIndex, nowIndex + 24);
   const max = Math.max(60, ...slice.map((h) => h.pm2_5 ?? 0));
   return (
     <div>
-      <div className="bars" role="img" aria-label="PM2.5 forecast for the next 24 hours">
+      <div className="bars" role="img" aria-label={tx("PM2.5 forecast for the next 24 hours", "अगले 24 घंटों का PM2.5 पूर्वानुमान")}>
         {slice.map((h, i) => (
           <div key={h.time} className={`b ${i === 0 ? "now" : ""}`}
             title={`${fmtHour(h.time)} · PM2.5 ${h.pm2_5?.toFixed(0) ?? "?"} µg/m³`}
@@ -107,22 +108,33 @@ export function CitySearch({ onPick }: { onPick: (p: Place) => void }) {
   const [msg, setMsg] = useState<string | null>(null);
   const timer = useRef<number>(0);
 
+  const [open, setOpen] = useState(false);
+  const tRef = useRef(t); // read the latest translator without re-running the search on every app update
+  tRef.current = t;
   useEffect(() => {
     window.clearTimeout(timer.current);
     if (q.trim().length < 2) { setResults([]); return; }
+    let stale = false; // an older, slower response must not overwrite results for newer text
     timer.current = window.setTimeout(() => {
-      api.geocode(q.trim(), lang).then((r) => setResults(r.results)).catch((e) => setMsg(e.message));
+      api.geocode(q.trim(), lang)
+        .then((r) => {
+          if (stale) return;
+          setResults(r.results);
+          setOpen(true);
+          if (r.results.length === 0) setMsg(tRef.current("no_city"));
+        })
+        .catch((e) => { if (!stale) setMsg(e.message); });
     }, 300);
-    return () => window.clearTimeout(timer.current);
+    return () => { stale = true; window.clearTimeout(timer.current); };
   }, [q, lang]);
 
-  const pick = (p: Place) => { onPick(p); setQ(""); setResults([]); };
+  const pick = (p: Place) => { onPick(p); setQ(""); setResults([]); setOpen(false); };
   const locate = () => {
-    if (!navigator.geolocation) { setMsg("Location is not available in this browser."); return; }
+    if (!navigator.geolocation) { setMsg(t("no_geo")); return; }
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => { setBusy(false); pick({ name: t("my_location"), lat: +pos.coords.latitude.toFixed(3), lon: +pos.coords.longitude.toFixed(3) }); },
-      () => { setBusy(false); setMsg("Location permission denied — search a city instead."); },
+      () => { setBusy(false); setMsg(t("geo_denied")); },
       { timeout: 10000 },
     );
   };
@@ -130,16 +142,22 @@ export function CitySearch({ onPick }: { onPick: (p: Place) => void }) {
   return (
     <div className="stack">
       <div className="row">
-        <div className="search" style={{ flex: 1, minWidth: 200 }}>
+        <div className="search" style={{ flex: 1, minWidth: 200 }}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); }}>
           <label className="sr-only" htmlFor="city">{t("search_city")}</label>
-          <input id="city" type="search" placeholder={`🔍 ${t("search_city")}`} value={q} autoComplete="off"
+          <input id="city" type="search" role="combobox" placeholder={`🔍 ${t("search_city")}`} value={q} autoComplete="off"
+            aria-expanded={open && results.length > 0} aria-controls="city-results" aria-autocomplete="list"
             onChange={(e) => { setQ(e.target.value); setMsg(null); }}
-            onKeyDown={(e) => { if (e.key === "Enter" && results[0]) pick(results[0]); }} />
-          {results.length > 0 && (
-            <ul role="listbox" aria-label={t("search_city")}>
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && results[0]) pick(results[0]);
+              if (e.key === "Escape") setOpen(false);
+            }} />
+          {open && results.length > 0 && (
+            <ul id="city-results" aria-label={t("search_city")}>
               {results.map((r) => (
                 <li key={`${r.lat},${r.lon}`}>
-                  <button type="button" onClick={() => pick(r)}>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(r)}>
                     <b>{r.name}</b> <span className="muted small">{[r.admin1, r.country].filter(Boolean).join(", ")}</span>
                   </button>
                 </li>
@@ -184,10 +202,32 @@ export function Assumptions({ items }: { items: string[] }) {
   );
 }
 
+/** Number field that lets people clear and retype, then clamps to [min, max] when they leave the field. */
+export function NumInput({ value, onChange, min, max, step = 1 }:
+  { value: number; onChange: (n: number) => void; min: number; max: number; step?: number }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText((t) => (Number(t) === value && t !== "" ? t : String(value))); }, [value]);
+  const commit = () => {
+    const n = Number(text);
+    const clamped = text.trim() !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value;
+    setText(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  };
+  return (
+    <input type="number" inputMode="decimal" min={min} max={max} step={step} value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = e.target.valueAsNumber;
+        if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
+      }}
+      onBlur={commit} />
+  );
+}
+
 export function Btn({ busy, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) {
   return (
     <button className="btn" {...rest} disabled={busy || rest.disabled}>
-      {busy ? <span className="spinner" aria-label="Loading" /> : children}
+      {busy ? <span className="spinner" role="status" aria-label="…" /> : children}
     </button>
   );
 }

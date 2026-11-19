@@ -32,5 +32,7 @@ def test_vercel_entry_exposes_app_and_works_without_lifespan():
                                               "lat": 28.6, "lon": 77.2})
         assert r.status_code == 201
     finally:
+        if main.app.state.store is not None:
+            main.app.state.store.close()
         main.app.state.http = None
         main.app.state.store = None

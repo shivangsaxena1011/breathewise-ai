@@ -72,6 +72,7 @@ def client_factory():
         air_quality.clear_cache()
         main.general_limiter.reset()
         main.ai_limiter.reset()
+        main._confirmed.clear()
         main.app.state.http = httpx.AsyncClient(transport=mock_transport(fail_air))
         main.app.state.store = ReportStore(":memory:")
         c = TestClient(main.app)
@@ -82,6 +83,9 @@ def client_factory():
     yield factory
     for c in clients:
         c.__exit__(None, None, None)
+    store = getattr(main.app.state, "store", None)
+    if store is not None:
+        store.close()
     for attr in ("http", "store"):
         if hasattr(main.app.state, attr):
             delattr(main.app.state, attr)
