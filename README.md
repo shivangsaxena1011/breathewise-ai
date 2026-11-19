@@ -62,6 +62,8 @@ There are 60 backend tests (AQI breakpoints, risk engine, calculators, every API
 
 ## Deploy for free on Render (no credit card)
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/shivangsaxena1011/breathewise-ai)
+
 1. Sign in at https://render.com with GitHub.
 2. Click **New → Blueprint** and pick this repo. Render reads `render.yaml` and builds the `Dockerfile` on the free plan.
 3. When asked, paste your `GEMINI_API_KEY` (from https://aistudio.google.com/apikey). It's optional, because the app works without it in rule-based mode.
