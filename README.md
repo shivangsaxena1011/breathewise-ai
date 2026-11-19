@@ -32,8 +32,7 @@ A GenAI assistant that helps families and communities get through severe winter 
 8. [Evaluation focus areas](#evaluation-focus-areas)
 9. [Assumptions](#assumptions)
 10. [Tech stack and project structure](#tech-stack-and-project-structure)
-11. [Running, testing and deployment](#running-testing-and-deployment)
-12. [Limitations and roadmap](#limitations-and-roadmap)
+11. [Limitations and roadmap](#limitations-and-roadmap)
 
 ---
 
@@ -200,37 +199,6 @@ The core principle is **compute first, then explain**. The model never invents d
 ├── BLOG.md                   # technical blog (problem, prompt strategy, solution)
 └── .github/workflows/ci.yml  # lint + tests + build on every push
 ```
-
-## Running, testing and deployment
-
-**Prerequisites:** Python 3.12+ and Node.js 22+. A Gemini API key is optional: without one, the app runs in rule-based mode.
-
-From the project folder:
-
-```powershell
-cd backend; python -m venv .venv; .venv\Scripts\pip install -r requirements-dev.txt
-```
-```powershell
-cd frontend; npm install; npm run build
-```
-```powershell
-$env:GEMINI_API_KEY = "<your key>"; cd backend; .venv\Scripts\python -m uvicorn app.main:app --port 8000
-```
-
-Then open http://localhost:8000. For frontend hot reload, run `npm run dev` in `frontend/`, which proxies `/api` to port 8000.
-
-**Tests and checks**
-
-```powershell
-cd backend; .venv\Scripts\python -m ruff check app tests ..\api; .venv\Scripts\python -m pytest --cov=app
-```
-```powershell
-cd frontend; npx tsc --noEmit; npm test
-```
-
-**Configuration** (environment variables, see [.env.example](.env.example)): `GEMINI_API_KEY`, `WAQI_TOKEN` (free, for live station data), `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Upstash Redis, for persistent reports; set automatically by Vercel's Upstash integration), `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `AI_RATE_LIMIT_PER_MINUTE`, `AIR_CACHE_SECONDS`.
-
-**Deployment:** the app is deployed on **Vercel**. `vercel.json` builds the React app as static files and runs FastAPI as a Python serverless function (`api/index.py`) for every `/api/*` route. The Gemini key is set as a Vercel environment variable. A `Dockerfile` is also included for container platforms such as Google Cloud Run.
 
 ## Limitations and roadmap
 
