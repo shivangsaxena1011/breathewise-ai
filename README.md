@@ -68,7 +68,7 @@ BreatheWise turns live air-quality data and a short household profile into speci
 
 | Area | What the user gets |
 | --- | --- |
-| **🌤️ Today** | An India AQI (CPCB method), **calibrated to the nearest live monitoring station** when one is within 30 km, with its category and health statement, current pollutants, and a 24-hour PM2.5 forecast. It marks the **cleanest and worst 2-hour windows** and explains *why* smog is building (low wind, shallow mixing layer, fog). A regional 5×5 pollution grid sits alongside the **Proactive Guardian**, which checks a planned activity against the forecast and suggests a cleaner time. |
+| **🌤️ Today** | An estimated India AQI (CPCB method) with its category and health statement, current pollutants, and a 24-hour PM2.5 forecast. It marks the **cleanest and worst 2-hour windows** and explains *why* smog is building (low wind, shallow mixing layer, fog). A regional 5×5 pollution grid sits alongside the **Proactive Guardian**, which checks a planned activity against the forecast and suggests a cleaner time. |
 | **🛡️ Family Shield** | A risk level for **each family member** based on age, health conditions and time outdoors. Every action comes with a "Why?". It also gives a whole-home checklist and an adaptive daily routine built from the forecast windows. |
 | **🏠 Indoor Air Doctor** | Whether to open the windows right now, tips room by room, purifier sizing (clean-air delivery rate) for each room, and a low-cost DIY filter option for families without a purifier. |
 | **🌱 Travel & Impact** | CO₂ per person for 11 travel modes, with the maths shown. A **What-If simulator** covers switching travel mode, moving exercise to a cleaner hour (inhaled-dose reduction), not burning waste, and saving electricity. An eco tracker adds streaks, a weekly chart and challenges. |
@@ -97,8 +97,8 @@ It also has offline mode (the last reading is shown with its timestamp), dark mo
 **Request flow, using the Family Shield as an example**
 
 1. The user picks a city and describes the household (names, ages, conditions, hours outside, commute).
-2. The backend fetches hourly air-quality and weather data from the model, plus the nearest monitoring-station reading (cached for 10 minutes for each ~1 km location).
-3. If the station is close and recent, the model is calibrated to it (see below).
+2. The backend fetches hourly air-quality and weather data from the model (cached for 10 minutes for each ~1 km location).
+3. Optionally, when a station-data token is configured, the model is calibrated to the nearest monitoring station (see below). The live demo runs on the model alone.
 4. Deterministic code computes the AQI, the cleanest and worst windows, and each member's risk score and actions, and records which data was used.
 5. Gemini receives that plan as data and rewrites it into warm, personalised guidance in English or Hindi. It may not add numbers or drop safety actions.
 6. The UI shows both: the AI summary, and the rule-based actions with their *Why?*. If Gemini is unavailable, the rule-based plan is shown alone.
@@ -110,7 +110,7 @@ All numbers come from transparent, unit-tested code ([`backend/app/services`](ba
 | Decision | Logic |
 | --- | --- |
 | **AQI** | India NAQI (CPCB 2014): a sub-index per pollutant by linear interpolation within the breakpoint band, using 24-hour means for PM2.5, PM10, NO₂ and SO₂ and 8-hour means for O₃ and CO, with at least ⅔ data coverage. AQI is the maximum sub-index, and at least 3 pollutants including PM are required. |
-| **Station calibration** | Use the nearest WAQI station only if it is within 30 km and its reading is under 3 hours old. Convert its US-EPA PM2.5 and PM10 sub-indices back to µg/m³ (2013 EPA breakpoints, the scale WAQI uses). Correction factor = measured ÷ model value for the same hour, limited to between 0.4× and 3×, and skipped if the model reads under 5 µg/m³. The factor scales the 24-hour averages (so the AQI) and the whole hourly forecast, so every feature uses corrected numbers. With no token or no usable station, the model is used alone. |
+| **Station calibration (optional, off on the demo)** | Use the nearest WAQI station only if it is within 30 km and its reading is under 3 hours old. Convert its US-EPA PM2.5 and PM10 sub-indices back to µg/m³ (2013 EPA breakpoints, the scale WAQI uses). Correction factor = measured ÷ model value for the same hour, limited to between 0.4× and 3×, and skipped if the model reads under 5 µg/m³. The factor scales the 24-hour averages (so the AQI) and the whole hourly forecast, so every feature uses corrected numbers. With no token or no usable station, the model is used alone. |
 | **Best and worst time** | The cleanest and dirtiest consecutive 2-hour daytime windows (6:00–21:00) in the next 24 hours, then for each later day. |
 | **Smog drivers** | Wind below 6 km/h means pollution isn't dispersing. A mixing layer below 400 m means pollution is trapped near the ground. Humidity above 80% with temperature below 18 °C means fog plus smoke. |
 | **Member risk (0–5)** | Today's worst air level, plus 1 for a sensitive age (infant, child, elderly), plus 1 for lung or heart conditions (when the air is Moderate or worse), plus 1 for pregnancy, plus 1 for 4 or more hours outdoors. Capped at 5. Ties go to the person with more sensitivity factors. |
@@ -150,7 +150,7 @@ The core principle is **compute first, then explain**. The model never invents d
 
 ## Assumptions
 
-- **Air data** comes from an atmospheric model (CAMS via Open-Meteo, roughly a 10–45 km grid). When a monitoring station is within 30 km, the model is calibrated to that station's latest measurement. Busy roads and burning sites can still be worse than both.
+- **Air data** comes from an atmospheric model (CAMS via Open-Meteo, roughly a 10–45 km grid). An optional station-calibration module can correct it with the nearest monitoring station; it is not enabled on the live demo. Busy roads and burning sites can still be worse than both.
 - **Calibration** assumes the station's error ratio at the current hour holds for the rest of the forecast. This works well for the next day, when weather patterns are similar, and is an approximation beyond that.
 - **The AQI is an estimate** of the CPCB index computed from those concentrations, not an official CPCB value. Station sub-indices are converted using the US-EPA 2013 breakpoints that WAQI reports in.
 - **Emission factors** are typical Indian-context values: petrol car 15 km/L, scooter 45 km/L, city bus 30 passengers, grid 0.72 kg CO₂/kWh, open waste burning about 8 g PM2.5 per kg. Each one is shown next to the result.
@@ -236,7 +236,7 @@ cd frontend; npx tsc --noEmit; npm test
 
 ## Limitations and roadmap
 
-- **Persistence:** community reports are permanent and shared across serverless instances when Upstash Redis is connected. Without it they live in per-instance SQLite, which suits local runs.
+- **Persistence:** on the live demo, community reports are kept in per-instance SQLite and can reset when Vercel restarts an instance. The code already supports a hosted Redis store (Upstash) for permanent, shared reports; it is not enabled on the demo.
 - **Data:** the next step is to combine several nearby stations (inverse-distance weighting) and add a station map layer.
 - **Planned features:** push notifications for the Guardian, more Indian languages, and school and neighbourhood dashboards.
 
