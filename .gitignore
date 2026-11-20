@@ -20,3 +20,6 @@ backend/data/
 # local tooling
 .claude/
 .vercel
+
+.vercel
+.env*
