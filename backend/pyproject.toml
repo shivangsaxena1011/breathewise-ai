@@ -22,6 +22,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "S107", "S108", "ANN", "ARG"]  # asserts, fake secrets and untyped fixtures are fine in tests
+"../api/**" = ["E402", "S108"]
+"api/**" = ["E402", "S108"]
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
