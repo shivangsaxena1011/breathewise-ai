@@ -241,8 +241,8 @@ export function Assumptions({ items }: { items: string[] }) {
 }
 
 /** Number field that lets people clear and retype, then clamps to [min, max] when they leave the field. */
-export function NumInput({ value, onChange, min, max, step = 1 }:
-  { value: number; onChange: (n: number) => void; min: number; max: number; step?: number }) {
+export function NumInput({ value, onChange, min, max, step = 1, id, "aria-label": ariaLabel, "aria-labelledby": ariaLabelledBy }:
+  { value: number; onChange: (n: number) => void; min: number; max: number; step?: number; id?: string; "aria-label"?: string; "aria-labelledby"?: string }) {
   const [text, setText] = useState(String(value));
   // Follow outside changes to `value` by adjusting state during render (React's recommended pattern, not an effect).
   const [synced, setSynced] = useState(value);
@@ -257,7 +257,7 @@ export function NumInput({ value, onChange, min, max, step = 1 }:
     if (clamped !== value) onChange(clamped);
   };
   return (
-    <input type="number" inputMode="decimal" min={min} max={max} step={step} value={text}
+    <input id={id} aria-label={ariaLabel} aria-labelledby={ariaLabelledBy} type="number" inputMode="decimal" min={min} max={max} step={step} value={text}
       onChange={(e) => {
         setText(e.target.value);
         const n = e.target.valueAsNumber;

@@ -99,13 +99,13 @@ export default function Community() {
                 ))}
               </div>
             </div>
-            <label className="field">{t("description")}
-              <textarea rows={3} maxLength={500} value={desc} onChange={(e) => setDesc(e.target.value)}
+            <label className="field" htmlFor="report-description">{t("description")}
+              <textarea id="report-description" rows={3} maxLength={500} value={desc} onChange={(e) => setDesc(e.target.value)}
                 placeholder={tx("e.g. Pile of garbage burning behind the market since morning", "जैसे: सुबह से बाज़ार के पीछे कचरे का ढेर जल रहा है")} />
             </label>
-            <label className="field">
+            <label className="field" htmlFor="report-photo">
               <span><span aria-hidden="true">📷</span> {t("photo")}{!ai && tx(" — AI key not set", " — AI कुंजी सेट नहीं")}</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={aiBusy || !ai} onChange={(e) => onPhoto(e.currentTarget)} />
+              <input id="report-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={aiBusy || !ai} onChange={(e) => onPhoto(e.currentTarget)} />
             </label>
             {aiBusy && <div className="skeleton" role="status" aria-label={t("busy")} />}
             {aiNote && <div className="notice info" role="status">{aiNote}</div>}

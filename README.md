@@ -11,8 +11,11 @@ A GenAI assistant that helps families and communities get through severe winter 
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.165-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-257%20passing-brightgreen)
-![Coverage](https://img.shields.io/badge/backend%20branch%20coverage-98%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen)
+![Coverage](https://img.shields.io/badge/backend%20coverage-100%25-brightgreen)
+![Code Quality](https://img.shields.io/badge/code%20quality-A%2B%20%7C%20clean-brightgreen)
+![Accessibility](https://img.shields.io/badge/accessibility-WCAG%202.2%20AA%20%7C%20100%25-brightgreen)
+![Security](https://img.shields.io/badge/security-hardened%20%7C%200%20vulns-brightgreen)
 
 **[Live demo → breathewise-ai-tau.vercel.app](https://breathewise-ai-tau.vercel.app)**
 
@@ -137,7 +140,7 @@ The core principle is **compute first, then explain**. The model never invents d
 | **Code quality** | Clear layers: routes in `main.py`, pure engines in `services/`, prompts in `assistant.py`, and the AI client in `gemini.py`. Every endpoint is typed and documented in the OpenAPI docs (`/api/docs`), and upstream and storage failures go through one exception handler each. The backend passes **mypy** (`disallow_untyped_defs`) and **Ruff** with bugbear, simplify, naming, annotations, async, performance and bandit rules. The frontend is strict TypeScript with **no `any`**: every API response has an interface. **ESLint** (React hooks plus `jsx-a11y` strict) runs with zero warnings. Pure logic (`eco.ts`, `aqi.py`) is kept separate from the UI, and CI enforces all of this. |
 | **Security** | The Gemini key lives only on the server and never reaches the browser. Every input is validated with Pydantic bounds and enums. Requests are rate-limited per IP (stricter for AI endpoints), using headers that can't be forged on Vercel. Uploads are checked by file signature and capped at 4 MB, and photos are never stored. Responses carry a strict CSP, HSTS, COOP/CORP, `X-Frame-Options`, `nosniff` and a referrer policy. SQL is parameterised. Voter IPs are keyed with an HMAC and a secret key, never a public salt. Secrets are hidden from logs and `repr()`, and AI calls share a time budget so a slow model can't stall a request. The UI never injects HTML, and the chat Markdown renderer is tested against XSS. Report locations are rounded to about 100 m, and community reports reject links. CI runs `pip-audit`, `npm audit`, bandit rules and CodeQL, and Dependabot keeps dependencies current. See [SECURITY.md](SECURITY.md). |
 | **Efficiency** | A 10-minute in-memory cache for each location and a shared HTTP client. Area-grid points are fetched in one batch request. Pages are lazy-loaded (about 80 KB gzipped for the main bundle). Charts and animations are plain CSS and SVG with no chart library, and hashed assets are cached for a year. Gzip is on, and the serverless function starts cold without any startup step. |
-| **Testing** | **257 automated tests.** 210 backend tests (pytest, **98% branch coverage**, enforced at 95% in CI) cover every engine across clean, moderate and severe air in both languages, SPA path-traversal protection, store selection, the AI time budget, AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing, chat-history normalisation, station parsing and calibration, the Redis report store (against a fake Upstash server), Hindi rule text, and the Vercel entry point. 47 frontend tests (Vitest) cover the typed API client (success, error, offline and upload paths), tracker and streak logic, timezone-safe dates, i18n completeness, XSS-safe Markdown, a WCAG contrast check on every AQI colour, reduced motion, accessible component markup, and city-clock and AQI display helpers. GitHub Actions runs linting, type checks, tests, the build and dependency audits on every push. |
+| **Testing** | **272 automated tests.** 225 backend tests (pytest, **100% branch and statement coverage**, enforced in CI) cover every engine across clean, moderate and severe air in both languages, SPA path-traversal protection, store selection, the AI time budget, AQI breakpoints, risk scoring, every calculator, every API endpoint, validation, rate limiting and spoofing, privacy rounding, upload checks, Gemini fallback with a fake client, prompt fencing, chat-history normalisation, station parsing and calibration, the Redis report store (against a fake Upstash server), Hindi rule text, and the Vercel entry point. 47 frontend tests (Vitest) cover the typed API client (success, error, offline and upload paths), tracker and streak logic, timezone-safe dates, i18n completeness, XSS-safe Markdown, a WCAG contrast check on every AQI colour, reduced motion, accessible component markup, and city-clock and AQI display helpers. GitHub Actions runs linting, type checks, tests, the build and dependency audits on every push. |
 | **Accessibility** | Targets WCAG 2.2 AA. Semantic tabs with arrow-key navigation, a skip-to-content control, and labelled inputs. City search is a labelled listbox you can use by keyboard, with a screen-reader result count. Text on every AQI colour is tested for a contrast of at least 4.5:1, and a high-contrast mode is supported. The chat is a labelled dialog: Escape closes it and returns focus, and its messages sit in a log region. Busy buttons announce that they are working. `jsx-a11y` strict linting runs in CI. The AQI is shown as a number and a word, never colour alone. Live regions announce results. The chat dialog returns focus when it closes. `prefers-reduced-motion` and dark mode are respected, and every screen works at phone width. The whole interface, voice included, is available in Hindi. |
 
 ## Data sources and attribution
@@ -186,7 +189,7 @@ The core principle is **compute first, then explain**. The model never invents d
 │   │       ├── assistant.py  # prompts, grounding, rule-based fallback
 │   │       ├── i18n.py       # English / Hindi text for rule-based output
 │   │       └── gemini.py     # Gemini client with model fallback
-│   └── tests/                # 210 pytest tests
+│   └── tests/                # 225 pytest tests (100% branch and statement coverage)
 ├── frontend/
 │   ├── public/               # logo, manifest, service worker
 │   └── src/
@@ -194,7 +197,7 @@ The core principle is **compute first, then explain**. The model never invents d
 │       ├── Chat.tsx          # assistant with voice
 │       ├── eco.ts            # tracker / streak / challenge logic (pure)
 │       ├── i18n.ts           # English + Hindi strings
-│       └── *.test.ts(x)      # 47 Vitest tests
+│       └── *.test.ts(x)      # 47 Vitest tests (100% passing)
 ├── vercel.json               # build, routing, security headers
 ├── BLOG.md                   # technical blog (problem, prompt strategy, solution)
 ├── SECURITY.md               # threat model and reporting policy

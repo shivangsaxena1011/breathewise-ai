@@ -29,18 +29,24 @@ const NEW_MEMBER: Member = { name: "", age_group: "child", conditions: [], outdo
 /** Edit one household member: name, age, health conditions, time outdoors and commute. */
 function MemberEditor({ m, onChange, onRemove }: { m: Member; onChange: (m: Member) => void; onRemove?: () => void }) {
   const { t, lang } = useApp();
-  const conditionsId = useId();
+  const baseId = useId();
+  const conditionsId = `${baseId}-conditions`;
+  const nameId = `${baseId}-name`;
+  const ageId = `${baseId}-age`;
+  const outdoorId = `${baseId}-outdoor`;
+  const commuteId = `${baseId}-commute`;
+  const exercisesId = `${baseId}-exercises`;
   const pick = (en: string, hi: string) => (lang === "hi" ? hi : en);
   const toggle = (c: Condition) =>
     onChange({ ...m, conditions: m.conditions.includes(c) ? m.conditions.filter((x) => x !== c) : [...m.conditions, c] });
   return (
     <div className="member stack">
       <div className="row">
-        <label className="field" style={{ flex: 1 }}>{t("name")}
-          <input type="text" value={m.name} maxLength={40} placeholder={pick("e.g. Riya", "जैसे: रिया")} required
+        <label className="field" htmlFor={nameId} style={{ flex: 1 }}>{t("name")}
+          <input id={nameId} type="text" value={m.name} maxLength={40} placeholder={pick("e.g. Riya", "जैसे: रिया")} required
             aria-invalid={!m.name.trim()} onChange={(e) => onChange({ ...m, name: e.target.value })} /></label>
-        <label className="field" style={{ flex: 1 }}>{t("age")}
-          <select value={m.age_group} onChange={(e) => onChange({ ...m, age_group: e.target.value as AgeGroup })}>
+        <label className="field" htmlFor={ageId} style={{ flex: 1 }}>{t("age")}
+          <select id={ageId} value={m.age_group} onChange={(e) => onChange({ ...m, age_group: e.target.value as AgeGroup })}>
             {AGES.map(([k, en, hi]) => <option key={k} value={k}>{pick(en, hi)}</option>)}
           </select></label>
         {onRemove && (
@@ -59,18 +65,21 @@ function MemberEditor({ m, onChange, onRemove }: { m: Member; onChange: (m: Memb
         </div>
       </div>
       <div className="row">
-        <label className="field" style={{ flex: 1 }}>{t("outdoor_h")} ({m.outdoor_hours}h)
-          <input type="range" min={0} max={12} step={0.5} value={m.outdoor_hours}
+        <label className="field" htmlFor={outdoorId} style={{ flex: 1 }}>{t("outdoor_h")} ({m.outdoor_hours}h)
+          <input id={outdoorId} type="range" min={0} max={12} step={0.5} value={m.outdoor_hours}
             onChange={(e) => onChange({ ...m, outdoor_hours: +e.target.value })} /></label>
-        <label className="field" style={{ flex: 1 }}>{t("commute")}
-          <select value={m.commute_mode ?? ""}
+        <label className="field" htmlFor={commuteId} style={{ flex: 1 }}>{t("commute")}
+          <select id={commuteId} value={m.commute_mode ?? ""}
             onChange={(e) => onChange({ ...m, commute_mode: (e.target.value || null) as Mode | null })}>
             <option value="">—</option>
             {MODES.map(([k, en, hi]) => <option key={k} value={k}>{pick(en, hi)}</option>)}
           </select></label>
       </div>
-      <label className="check"><input type="checkbox" checked={m.exercises_outdoors}
-        onChange={(e) => onChange({ ...m, exercises_outdoors: e.target.checked })} />{t("exercises")}</label>
+      <label className="check" htmlFor={exercisesId}>
+        <input id={exercisesId} type="checkbox" checked={m.exercises_outdoors}
+          onChange={(e) => onChange({ ...m, exercises_outdoors: e.target.checked })} />
+        {t("exercises")}
+      </label>
     </div>
   );
 }

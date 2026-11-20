@@ -12,6 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
 # Vercel's filesystem is read-only except /tmp.
-os.environ.setdefault("DATABASE_PATH", "/tmp/breathewise.db")  # noqa: S108 - the only writable path on Vercel
+os.environ.setdefault("DATABASE_PATH", "/tmp/breathewise.db")
 
-from app.main import app  # noqa: E402,F401  (Vercel looks for a module-level `app`)
+from app.main import app  # noqa: F401  (Vercel looks for a module-level `app`)

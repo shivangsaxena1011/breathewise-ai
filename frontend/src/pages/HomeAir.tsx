@@ -51,12 +51,13 @@ export default function HomeAir() {
         <Card span={5} title={t("home_title")} icon="🏡">
           <div className="stack">
             {HOME_CHECKS.map(([field, key]) => (
-              <label key={field} className="check">
-                <input type="checkbox" checked={home[field]} onChange={(e) => setHome({ [field]: e.target.checked })} />{t(key)}
+              <label key={field} className="check" htmlFor={`home-check-${field}`}>
+                <input id={`home-check-${field}`} type="checkbox" checked={home[field]} onChange={(e) => setHome({ [field]: e.target.checked })} />
+                {t(key)}
               </label>
             ))}
-            <label className="field">{t("fuel")}
-              <select value={home.cooking_fuel} onChange={(e) => setHome({ cooking_fuel: e.target.value as Home["cooking_fuel"] })}>
+            <label className="field" htmlFor="cooking-fuel">{t("fuel")}
+              <select id="cooking-fuel" value={home.cooking_fuel} onChange={(e) => setHome({ cooking_fuel: e.target.value as Home["cooking_fuel"] })}>
                 <option value="lpg">LPG</option>
                 <option value="png">{tx("Piped gas (PNG)", "पाइप गैस (PNG)")}</option>
                 <option value="induction">{tx("Induction / electric", "इंडक्शन / बिजली")}</option>
@@ -72,8 +73,8 @@ export default function HomeAir() {
               </div>
             </div>
             {roomList.map(([k, area]) => (
-              <label key={k} className="field">{roomLabel(k)} — {area} m²
-                <input type="range" min={4} max={40} value={area} aria-valuetext={`${area} m²`}
+              <label key={k} className="field" htmlFor={`room-area-${k}`}>{roomLabel(k)} — {area} m²
+                <input id={`room-area-${k}`} type="range" min={4} max={40} value={area} aria-valuetext={`${area} m²`}
                   onChange={(e) => setRooms({ ...rooms, [k]: +e.target.value })} />
               </label>
             ))}

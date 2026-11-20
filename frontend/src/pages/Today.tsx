@@ -98,13 +98,23 @@ function Guardian() {
     <Card title={t("guardian")} icon="🛡️" span={5}>
       <p className="small muted" style={{ marginTop: -6 }}>{t("guardian_sub")}</p>
       <div className="stack">
-        <label className="field">{t("activity")}<input type="text" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} /></label>
+        <label className="field" htmlFor="guardian-activity">{t("activity")}
+          <input id="guardian-activity" type="text" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} />
+        </label>
         <div className="row">
-          <label className="field" style={{ flex: 2 }}>{t("when")} {snap && <span className="muted">({snap.location.timezone})</span>}
-            <input type="datetime-local" value={start} onChange={(e) => setPicked(e.target.value)} /></label>
-          <label className="field" style={{ flex: 1 }}>{t("minutes")}<NumInput min={5} max={720} value={mins} onChange={setMins} /></label>
+          <label className="field" htmlFor="guardian-when" style={{ flex: 2 }}>
+            {t("when")} {snap && <span className="muted">({snap.location.timezone})</span>}
+            <input id="guardian-when" type="datetime-local" value={start} onChange={(e) => setPicked(e.target.value)} />
+          </label>
+          <label className="field" htmlFor="guardian-minutes" style={{ flex: 1 }}>
+            {t("minutes")}
+            <NumInput id="guardian-minutes" min={5} max={720} value={mins} onChange={setMins} />
+          </label>
         </div>
-        <label className="check"><input type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />{t("sensitive")}</label>
+        <label className="check" htmlFor="guardian-sensitive">
+          <input id="guardian-sensitive" type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />
+          {t("sensitive")}
+        </label>
         <div className="row">
           <Btn busy={busy} onClick={run} disabled={!title.trim()}>{t("check")}</Btn>
           {"Notification" in window && Notification.permission === "default" && (

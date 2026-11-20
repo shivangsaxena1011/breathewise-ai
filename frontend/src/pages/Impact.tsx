@@ -23,8 +23,14 @@ function TripCompare() {
   return (
     <Card title={tx("Green Mobility", "ग्रीन मोबिलिटी")} icon="🚦" span={6}>
       <div className="row">
-        <label className="field" style={{ flex: 1 }}>{t("trip_km")}<NumInput min={1} max={500} value={km} onChange={setKm} /></label>
-        <label className="field" style={{ flex: 1 }}>{t("people")}<NumInput min={1} max={8} value={people} onChange={setPeople} /></label>
+        <label className="field" htmlFor="trip-km" style={{ flex: 1 }}>
+          {t("trip_km")}
+          <NumInput id="trip-km" min={1} max={500} value={km} onChange={setKm} />
+        </label>
+        <label className="field" htmlFor="trip-people" style={{ flex: 1 }}>
+          {t("people")}
+          <NumInput id="trip-people" min={1} max={8} value={people} onChange={setPeople} />
+        </label>
         <Btn busy={busy} onClick={run} style={{ alignSelf: "end" }}>{t("compare")}</Btn>
       </div>
       {err && <div className="notice warn" role="alert" style={{ marginTop: 10 }}>{err}</div>}
@@ -81,30 +87,31 @@ function WhatIf() {
     <Card title={t("whatif")} icon="🔮" span={6}>
       <div className="stack">
         <div className="row">
-          <label className="field" style={{ flex: 1 }}>{t("from")}
-            <select value={from} onChange={(e) => setFrom(e.target.value as Mode)}>{modeOptions}</select></label>
-          <label className="field" style={{ flex: 1 }}>{t("to")}
-            <select value={to} onChange={(e) => setTo(e.target.value as Mode)}>{modeOptions}</select></label>
+          <label className="field" htmlFor="whatif-from" style={{ flex: 1 }}>{t("from")}
+            <select id="whatif-from" value={from} onChange={(e) => setFrom(e.target.value as Mode)}>{modeOptions}</select></label>
+          <label className="field" htmlFor="whatif-to" style={{ flex: 1 }}>{t("to")}
+            <select id="whatif-to" value={to} onChange={(e) => setTo(e.target.value as Mode)}>{modeOptions}</select></label>
         </div>
         <div className="row">
-          <label className="field" style={{ flex: 1 }}>{t("km_one_way")}<NumInput min={1} max={200} value={km} onChange={setKm} /></label>
-          <label className="field" style={{ flex: 1 }}>{t("days_week")} ({days})
-            <input type="range" min={1} max={7} value={days} onChange={(e) => setDays(+e.target.value)} /></label>
+          <label className="field" htmlFor="whatif-km" style={{ flex: 1 }}>{t("km_one_way")}
+            <NumInput id="whatif-km" min={1} max={200} value={km} onChange={setKm} /></label>
+          <label className="field" htmlFor="whatif-days" style={{ flex: 1 }}>{t("days_week")} ({days})
+            <input id="whatif-days" type="range" min={1} max={7} value={days} onChange={(e) => setDays(+e.target.value)} /></label>
         </div>
         <div className="row">
-          <label className="field" style={{ flex: 1 }}>{t("exercise_at")}
-            <select value={hour} onChange={(e) => setHour(+e.target.value)} disabled={!place}>
+          <label className="field" htmlFor="whatif-hour" style={{ flex: 1 }}>{t("exercise_at")}
+            <select id="whatif-hour" value={hour} onChange={(e) => setHour(+e.target.value)} disabled={!place}>
               {Array.from({ length: 24 }, (_, h) => (
                 <option key={h} value={h}>{fmtHour(`0000-00-00T${String(h).padStart(2, "0")}`)}</option>
               ))}
             </select></label>
-          <label className="field" style={{ flex: 1 }}>
+          <label className="field" htmlFor="whatif-waste" style={{ flex: 1 }}>
             <span><span aria-hidden="true">🔥</span> {tx("kg waste/leaves burned per week", "हर सप्ताह जलाया कचरा/पत्ते (किग्रा)")}</span>
-            <NumInput min={0} max={200} value={waste} onChange={setWaste} /></label>
+            <NumInput id="whatif-waste" min={0} max={200} value={waste} onChange={setWaste} /></label>
         </div>
-        <label className="field">
+        <label className="field" htmlFor="whatif-kwh">
           <span><span aria-hidden="true">⚡</span> {tx("kWh electricity saved per month", "हर महीने बचाई बिजली (kWh)")}</span>
-          <NumInput min={0} max={2000} value={kwh} onChange={setKwh} /></label>
+          <NumInput id="whatif-kwh" min={0} max={2000} value={kwh} onChange={setKwh} /></label>
         <div className="row">
           <Btn busy={busy} onClick={() => run(false)}>{t("run_whatif")}</Btn>
           {ai && (
