@@ -4,7 +4,7 @@ import { AQI_LABELS_HI } from "./i18n";
 import { useApp } from "./store";
 
 export function Sky() {
-  const particles = Array.from({ length: 14 }, (_, i) => i);
+  const particles = Array.from({ length: 8 }, (_, i) => i);
   return (
     <div className="sky" aria-hidden="true">
       <div className="blob b1" /><div className="blob b2" /><div className="blob b3" />

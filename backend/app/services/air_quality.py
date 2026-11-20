@@ -7,6 +7,7 @@ so the UI never presents it as a ground-station measurement.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from statistics import mean
 from typing import Any
@@ -234,22 +235,28 @@ async def get_snapshot(client: httpx.AsyncClient, lat: float, lon: float) -> dic
     key = _key("snap", lat, lon)
     if (hit := _cache.get(key)) is not None:
         return hit
-    air = await _get_json(client, AIR_URL, {
-        "latitude": lat, "longitude": lon,
-        "current": ",".join(["us_aqi", *POLLUTANTS]),
-        "hourly": ",".join([*POLLUTANTS, "us_aqi"]),
-        "past_days": 1, "forecast_days": 3, "timezone": "auto",
-    })
-    try:
-        weather = await _get_json(client, WEATHER_URL, {
+
+    async def _fetch_weather() -> dict[str, Any] | None:
+        try:
+            return await _get_json(client, WEATHER_URL, {
+                "latitude": lat, "longitude": lon,
+                "hourly": "temperature_2m,relative_humidity_2m,wind_speed_10m,boundary_layer_height",
+                "past_days": 1, "forecast_days": 3, "timezone": "auto",
+            })
+        except UpstreamError:
+            return None
+
+    air, weather, station = await asyncio.gather(
+        _get_json(client, AIR_URL, {
             "latitude": lat, "longitude": lon,
-            "hourly": "temperature_2m,relative_humidity_2m,wind_speed_10m,boundary_layer_height",
+            "current": ",".join(["us_aqi", *POLLUTANTS]),
+            "hourly": ",".join([*POLLUTANTS, "us_aqi"]),
             "past_days": 1, "forecast_days": 3, "timezone": "auto",
-        })
-    except UpstreamError:
-        weather = None  # air data alone is still useful
+        }),
+        _fetch_weather(),
+        stations.nearest_station(client, lat, lon),
+    )
     snapshot = build_snapshot(air, weather)
-    station = await stations.nearest_station(client, lat, lon)
     snapshot = stations.apply_station(snapshot, station, _best_windows)
     snapshot.setdefault("station", None)
     _cache.set(key, snapshot)
