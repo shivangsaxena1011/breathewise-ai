@@ -49,7 +49,7 @@ def fake(monkeypatch):
         client = FakeClient(script)
         monkeypatch.setattr(gemini, "_get_client", lambda: client)
         monkeypatch.setattr(gemini, "enabled", lambda: True)
-        monkeypatch.setattr(gemini, "_preferred", None)
+        monkeypatch.setattr(gemini._state, "preferred", None)
         return client.models
     return install
 
@@ -155,5 +155,30 @@ def test_station_without_pm25_never_puts_none_in_context():
     snap = build_snapshot(make_air_payload(), None)
     snap["station"] = {"distance_km": 3.2, "measured_at": "2026-11-19T15:00:00+05:30", "us_aqi": 160.0,
                        "pm25": None, "pm10": 140.0}
-    ctx = assistant.context_block(snap, "Delhi", None)
+    ctx = assistant.context_block(snap)
     assert "None" not in ctx and "PM10 ≈ 140" in ctx
+
+
+def test_hanging_model_is_cut_off_by_the_time_budget(monkeypatch):
+    import dataclasses
+    import time
+
+    class Hanging:
+        async def generate_content(self, **_kwargs):
+            await asyncio.sleep(30)
+
+    client = type("C", (), {"aio": type("A", (), {"models": Hanging()})()})()
+    monkeypatch.setattr(gemini, "_get_client", lambda: client)
+    monkeypatch.setattr(gemini, "settings", dataclasses.replace(gemini.settings, gemini_timeout_seconds=0.05))
+    started = time.monotonic()
+    assert run(gemini.generate_text("sys", "hi")) is None
+    assert time.monotonic() - started < 2
+
+
+def test_spent_budget_skips_remaining_models(fake, monkeypatch):
+    import dataclasses
+
+    monkeypatch.setattr(gemini, "settings", dataclasses.replace(gemini.settings, gemini_timeout_seconds=0))
+    models = fake({PRIMARY: "never asked"})
+    assert run(gemini.generate_text("sys", "hi")) is None
+    assert models.calls == []

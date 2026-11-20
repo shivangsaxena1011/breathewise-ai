@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Sequence
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -36,7 +37,7 @@ US_PM10 = [(0, 50, 0, 54), (51, 100, 55, 154), (101, 150, 155, 254), (151, 200, 
            (201, 300, 355, 424), (301, 400, 425, 504), (401, 500, 505, 604)]
 
 
-def aqi_to_concentration(index: float | None, table: list[tuple[float, float, float, float]]) -> float | None:
+def aqi_to_concentration(index: float | None, table: Sequence[tuple[float, float, float, float]]) -> float | None:
     """Invert a US-EPA sub-index back to a concentration (linear within the band)."""
     if index is None or index < 0:
         return None

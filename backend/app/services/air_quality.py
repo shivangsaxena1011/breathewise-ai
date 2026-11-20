@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from statistics import mean
 from typing import Any
 
@@ -96,6 +97,14 @@ def _current_index(times: list[str], current_time: str | None, utc_offset_second
     return past[-1] if past else 0
 
 
+def _current_value(current: dict[str, Any], pollutant: str) -> float | None:
+    """Current concentration, with CO converted from µg/m³ to the mg/m³ CPCB uses."""
+    value = current.get(pollutant)
+    if value is None:
+        return None
+    return value / 1000 if pollutant == "carbon_monoxide" else float(value)
+
+
 def _smog_drivers(weather_now: dict[str, Any]) -> list[dict[str, str]]:
     """Plain-language reasons pollution may build up, from weather signals."""
     drivers: list[dict[str, str]] = []
@@ -117,11 +126,14 @@ def _window(hours: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
     """Cleanest and dirtiest consecutive 2-hour daytime (6:00–21:00) windows within `hours`."""
     # A window starts between 06:00 and 20:00 and covers that hour plus the next one (so it ends by 21:00).
     day = [h for h in hours if h["pm2_5"] is not None and 6 <= int(h["time"][11:13]) <= 21]
-    pairs = [(a, b) for a, b in zip(day, day[1:], strict=False) if b["time"][:10] == a["time"][:10]
+    pairs = [(a, b) for a, b in pairwise(day) if b["time"][:10] == a["time"][:10]
              and int(b["time"][11:13]) == int(a["time"][11:13]) + 1]
     if not pairs:
         return None
-    avg = lambda p: (p[0]["pm2_5"] + p[1]["pm2_5"]) / 2  # noqa: E731
+
+    def avg(pair: tuple[dict[str, Any], dict[str, Any]]) -> float:
+        return (pair[0]["pm2_5"] + pair[1]["pm2_5"]) / 2
+
     best, worst = min(pairs, key=avg), max(pairs, key=avg)
     return {
         "date": label,
@@ -132,14 +144,10 @@ def _window(hours: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
 
 def _best_windows(hourly: list[dict[str, Any]], now_index: int) -> list[dict[str, Any]]:
     """First entry: the rolling next 24 h (so late-evening users still get a useful plan); then each later day."""
-    out = []
-    if (nxt := _window(hourly[now_index:now_index + 24], "next_24h")) is not None:
-        out.append(nxt)
-    days = sorted({h["time"][:10] for h in hourly[now_index:]})[1:]
-    for d in days:
-        if (w := _window([h for h in hourly if h["time"].startswith(d)], d)) is not None:
-            out.append(w)
-    return out
+    later_days = sorted({h["time"][:10] for h in hourly[now_index:]})[1:]
+    candidates = [_window(hourly[now_index:now_index + 24], "next_24h")]
+    candidates += [_window([h for h in hourly if h["time"].startswith(d)], d) for d in later_days]
+    return [w for w in candidates if w is not None]
 
 
 def build_snapshot(air: dict[str, Any], weather: dict[str, Any] | None) -> dict[str, Any]:
@@ -213,12 +221,7 @@ def build_snapshot(air: dict[str, Any], weather: dict[str, Any] | None) -> dict[
             "us_aqi": current.get("us_aqi"),
             "basis": "model",
         },
-        "pollutants_now": {
-            aqi_math.POLLUTANT_LABELS[p]: (
-                current.get(p) / 1000 if p == "carbon_monoxide" and current.get(p) is not None else current.get(p)
-            )
-            for p in POLLUTANTS
-        },
+        "pollutants_now": {aqi_math.POLLUTANT_LABELS[p]: _current_value(current, p) for p in POLLUTANTS},
         "averages": {aqi_math.POLLUTANT_LABELS[k]: v for k, v in averages.items()},
         "units": {"default": "µg/m³", "CO": "mg/m³"},
         "weather_now": weather_now,

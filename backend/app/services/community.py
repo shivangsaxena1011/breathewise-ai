@@ -13,6 +13,7 @@ Reports show as "unverified" until several different neighbours confirm them.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import math
 import sqlite3
 import threading
@@ -37,7 +38,8 @@ def moderate(text: str) -> bool:
 
 
 def voter_id(ip: str, salt: str) -> str:
-    return hashlib.sha256(f"{salt}:{ip}".encode()).hexdigest()[:20]
+    """Stable pseudonym for one visitor: a keyed HMAC of the IP, so the IP itself is never stored."""
+    return hmac.new(salt.encode(), ip.encode(), hashlib.sha256).hexdigest()[:20]
 
 
 def present(d: dict[str, Any]) -> dict[str, Any]:
@@ -103,7 +105,10 @@ class SQLiteReportStore:
                  int(time.time()), int(report.ai_assisted)),
             )
             self._conn.commit()
-        return await self.get(cur.lastrowid)
+        created = await self.get(cur.lastrowid or 0)
+        if created is None:  # pragma: no cover - SQLite always returns the inserted row
+            raise StoreError("Report could not be saved")
+        return created
 
     async def get(self, report_id: int) -> dict[str, Any] | None:
         row = self._conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()

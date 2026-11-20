@@ -17,7 +17,7 @@ class FakeUpstash:
         self.data: dict = {}
         self.geo: dict = {}
 
-    def run(self, cmd):  # noqa: C901 - a small command interpreter
+    def run(self, cmd):  # a small command interpreter
         op, *args = cmd
         d = self.data
         if op == "INCR":
@@ -107,7 +107,7 @@ def test_one_confirmation_per_person():
 
 
 def test_nearby_filters_by_distance_and_sorts_newest_first():
-    store, fake = make_store()
+    store, _ = make_store()
     run(store.add(report()))
     run(store.add(report(lat=19.07, lon=72.87)))  # Mumbai, far away
     run(store.add(report(description="Construction dust on the main road")))

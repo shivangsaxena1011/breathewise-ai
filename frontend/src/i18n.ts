@@ -51,6 +51,7 @@ const en = {
   tomorrow: "tomorrow",
   alerts_btn: "Enable alerts",
   remove: "Remove",
+  busy: "Please wait…",
 };
 
 export type Key = keyof typeof en;
@@ -106,6 +107,7 @@ const hi: Record<Key, string> = {
   tomorrow: "कल",
   alerts_btn: "अलर्ट चालू करें",
   remove: "हटाएँ",
+  busy: "कृपया प्रतीक्षा करें…",
 };
 
 /** Hindi version of the CPCB health statement for each AQI category. */

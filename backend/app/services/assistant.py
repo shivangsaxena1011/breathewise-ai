@@ -23,7 +23,8 @@ PERSONA = (
 )
 
 
-def context_block(snapshot: dict[str, Any] | None, place: str | None, household: Household | None) -> str:
+def context_block(snapshot: dict[str, Any] | None) -> str:
+    """Trusted, app-computed facts the model must ground its answer on (never user-entered text)."""
     lines = ["CONTEXT (computed by the app, trustworthy):"]
     if snapshot:
         a = snapshot["aqi"]
@@ -31,9 +32,11 @@ def context_block(snapshot: dict[str, Any] | None, place: str | None, household:
         lines.append(f"- Estimated India AQI: {a['value']} ({a['label']}), dominant {a['dominant']}; US AQI now {a['us_aqi']}")
         pn = snapshot["pollutants_now"]
         lines.append("- Now (µg/m³, CO mg/m³): " + ", ".join(f"{k} {v:.1f}" for k, v in pn.items() if v is not None))
-        for w in (snapshot.get("windows") or [])[:2]:
-            lines.append(f"- {w['date']}: cleanest 2h from {w['best']['start'].replace('T', ' ')} (PM2.5 {w['best']['pm2_5']}), "
-                         f"dirtiest from {w['worst']['start'].replace('T', ' ')} (PM2.5 {w['worst']['pm2_5']})")
+        lines.extend(
+            f"- {w['date']}: cleanest 2h from {w['best']['start'].replace('T', ' ')} (PM2.5 {w['best']['pm2_5']}), "
+            f"dirtiest from {w['worst']['start'].replace('T', ' ')} (PM2.5 {w['worst']['pm2_5']})"
+            for w in (snapshot.get("windows") or [])[:2]
+        )
         if snapshot.get("smog_drivers"):
             lines.append("- Weather drivers: " + "; ".join(d["text"] for d in snapshot["smog_drivers"]))
         st = snapshot.get("station")
@@ -169,7 +172,7 @@ def fallback_answer(message: str, snapshot: dict[str, Any] | None, lang: str) ->
 
 async def chat(message: str, history: list[dict[str, str]], snapshot: dict[str, Any] | None,
                place: str | None, household: Household | None, lang: str) -> dict[str, Any]:
-    ctx = context_block(snapshot, place, household)
+    ctx = context_block(snapshot)
     profile = profile_block(place, household)
     final = f"{ctx}\n\n<USER_DATA>\n{profile}\n\nQuestion: {message}\n</USER_DATA>"
     text = await gemini.generate_text(system_prompt(lang), gemini.history_contents(history, final), max_tokens=2048) \
@@ -202,7 +205,8 @@ PLAN_SCHEMA = {
 }
 
 
-async def personalise_plan(plan: dict[str, Any], household: Household, lang: str) -> dict[str, Any] | None:
+async def personalise_plan(plan: dict[str, Any], lang: str) -> dict[str, Any] | None:
+    """Ask Gemini to rewrite the rule-based plan warmly, without adding numbers; None when AI is unavailable."""
     if not gemini.enabled():
         return None
     payload = {

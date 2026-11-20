@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type Household, type Lang, type Place, type Snapshot } from "./api";
 import { localDate, type EcoLog } from "./eco";
 import { translate, type Key } from "./i18n";
@@ -44,51 +44,56 @@ interface Ctx {
 
 const AppCtx = createContext<Ctx | null>(null);
 
+/** Last successful reading, kept so the app still shows something useful offline. */
+interface CachedSnap { place: Place; snap: Snapshot }
+
+/** Outcome of one air request, tagged with the place and refresh round it answers. */
+interface AirResult { key: string; round: number; snap: Snapshot | null; error: string | null; offlineSince: string | null }
+
+const placeKey = (p: Place) => `${p.lat},${p.lon}`;
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => load("bw.lang", "en"));
   const [place, setPlaceState] = useState<Place | null>(() => load("bw.place", null));
-  const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [offlineSince, setOfflineSince] = useState<string | null>(null);
   const [household, setHouseholdState] = useState<Household>(() => load("bw.household", DEFAULT_HOUSEHOLD));
   const [logs, setLogs] = useState<EcoLog[]>(() => load("bw.logs", []));
   const [ai, setAi] = useState(false);
+  const [round, setRound] = useState(0); // bumped by refresh() to re-fetch the same place
+  const [air, setAir] = useState<AirResult | null>(null);
 
   useEffect(() => { api.health().then((h) => setAi(h.ai)).catch(() => setAi(false)); }, []);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
-  const latest = useRef(0);
-  const snapFor = useRef<string | null>(null);
-  const fetchAir = useCallback(async (p: Place) => {
-    const id = ++latest.current; // ignore responses for a city the user already switched away from
-    setLoading(true);
-    setError(null);
-    const key = `${p.lat},${p.lon}`;
-    if (snapFor.current !== key) { setSnap(null); setOfflineSince(null); } // don't show the old city's numbers
-    try {
-      const s = await api.air(p);
-      if (id !== latest.current) return;
-      snapFor.current = key;
-      setSnap(s);
-      setOfflineSince(null);
-      save("bw.lastSnap", { place: p, snap: s });
-    } catch (e) {
-      if (id !== latest.current) return;
-      const cached = load<{ place: Place; snap: Snapshot } | null>("bw.lastSnap", null);
-      if (cached && cached.place.lat === p.lat && cached.place.lon === p.lon) {
-        snapFor.current = key;
-        setSnap(cached.snap);
-        setOfflineSince(cached.snap.fetched_at);
-      } else {
-        setError((e as Error).message);
-      }
-    } finally {
-      if (id === latest.current) setLoading(false);
-    }
-  }, []);
+  useEffect(() => {
+    if (!place) return;
+    const key = placeKey(place);
+    let stale = false; // ignore responses for a city the user already switched away from
+    api.air(place)
+      .then((snap) => {
+        if (stale) return;
+        setAir({ key, round, snap, error: null, offlineSince: null });
+        save("bw.lastSnap", { place, snap } satisfies CachedSnap);
+      })
+      .catch((e: unknown) => {
+        if (stale) return;
+        const cached = load<CachedSnap | null>("bw.lastSnap", null);
+        const usable = cached !== null && placeKey(cached.place) === key;
+        setAir({
+          key, round,
+          snap: usable ? cached.snap : null,
+          error: usable ? null : (e as Error).message,
+          offlineSince: usable ? cached.snap.fetched_at : null,
+        });
+      });
+    return () => { stale = true; };
+  }, [place, round]);
 
-  useEffect(() => { if (place) fetchAir(place); }, [place, fetchAir]);
+  // Only show a result for the current place, so the old city's numbers never linger.
+  const current = place && air?.key === placeKey(place) ? air : null;
+  const snap = current?.snap ?? null;
+  const error = current?.round === round ? current.error : null;
+  const offlineSince = current?.offlineSince ?? null;
+  const loading = place !== null && current?.round !== round;
 
   const value = useMemo<Ctx>(() => ({
     lang,
@@ -98,7 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     place,
     setPlace: (p) => { setPlaceState(p); save("bw.place", p); },
     snap, loading, error, offlineSince,
-    refresh: () => { if (place) fetchAir(place); },
+    refresh: () => setRound((r) => r + 1),
     household,
     setHousehold: (h) => { setHouseholdState(h); save("bw.household", h); },
     logs,
@@ -109,7 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     removeLog: (id) => setLogs((prev) => { const next = prev.filter((x) => x.id !== id); save("bw.logs", next); return next; }),
     ai,
-  }), [lang, place, snap, loading, error, offlineSince, household, logs, ai, fetchAir]);
+  }), [lang, place, snap, loading, error, offlineSince, household, logs, ai]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

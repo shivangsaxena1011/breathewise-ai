@@ -48,3 +48,36 @@ describe("Today helpers", async () => {
     expect(cityTimeAhead(snap, 99)).toBe("2026-11-19T19:00"); // clamps to the last forecast hour
   });
 });
+
+describe("accessible components", async () => {
+  const { AppProvider } = await import("./store");
+  const { ActionList, Btn, Card } = await import("./components");
+  const render = (node: React.ReactNode) => renderToStaticMarkup(<AppProvider>{node}</AppProvider>);
+
+  it("announces a busy button and keeps it from being pressed twice", () => {
+    const html = render(<Btn busy>Save</Btn>);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain("disabled");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Please wait…");
+    expect(html).not.toContain("Save");
+  });
+
+  it("is a plain button (never an accidental form submit) when idle", () => {
+    const html = render(<Btn>Save</Btn>);
+    expect(html).toContain('type="button"');
+    expect(html).not.toContain("aria-busy");
+  });
+
+  it("hides decorative card icons from screen readers", () => {
+    const html = render(<Card title="Pollutants" icon="🧪">x</Card>);
+    expect(html).toMatch(/<h3><span aria-hidden="true">🧪<\/span>Pollutants<\/h3>/);
+  });
+
+  it("keeps the reason behind every action one click away", () => {
+    const html = render(<ActionList items={[{ text: "Close windows", why: "Outdoor air is worse", priority: "high" }]} />);
+    expect(html).toContain('<div class="ico" aria-hidden="true">⚠️</div>');
+    expect(html).toContain("<summary>Why?</summary>");
+    expect(html).toContain("Outdoor air is worse");
+  });
+});

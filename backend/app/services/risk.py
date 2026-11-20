@@ -20,10 +20,6 @@ RESPIRATORY = {"asthma", "copd", "heart"}
 CONDITION_HI = {"asthma": "अस्थमा", "copd": "COPD", "heart": "हृदय रोग"}
 
 
-def _fmt_hour(iso: str | None, lang: str = "en") -> str:  # kept for callers that import it
-    return fmt_hour(iso, lang)
-
-
 def member_risk(member: Member, air_level: int, lang: str = "en") -> dict[str, Any]:
     factors: list[str] = []
     bonus = 0
@@ -186,7 +182,7 @@ def build_plan(household: Household, snapshot: dict[str, Any], lang: str = "en")
     worst = today["worst"]["start"] if today else None
     air_level = max(level_now, today["worst"]["level"] if today else 0)
 
-    members = []
+    members: list[dict[str, Any]] = []
     for m in household.members:
         r = member_risk(m, air_level, lang)
         members.append({

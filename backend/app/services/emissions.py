@@ -7,6 +7,7 @@ of the user's own vehicle; the UI lets people see (and question) each one.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 # kg CO2 per litre / kg of fuel (tank-to-wheel)
@@ -59,8 +60,9 @@ def per_person_km(mode: str, occupants: int = 1) -> float:
     return m["kg_per_pkm"]
 
 
-def compare_trip(distance_km: float, occupants: int = 1, modes: list[str] | None = None) -> dict[str, Any]:
-    chosen = modes or list(MODES)
+def compare_trip(distance_km: float, occupants: int = 1, modes: Sequence[str] | None = None) -> dict[str, Any]:
+    """Per-person CO2 for one trip across travel modes, cleanest first, with each row relative to the worst."""
+    chosen = list(modes) if modes else list(MODES)
     rows = []
     for key in chosen:
         m = MODES[key]

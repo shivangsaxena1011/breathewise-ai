@@ -21,7 +21,7 @@ def alerts(activities: list[Activity], snapshot: dict[str, Any], household: Hous
     now = snapshot.get("now_index", 0)
     sensitive_household = bool(household and any(
         m.age_group in ("infant", "child", "elderly") or m.conditions for m in household.members))
-    out = []
+    out: list[dict[str, Any]] = []
     for act in activities:
         i = lookup.get(act.start[:13])
         if i is None:
@@ -43,7 +43,7 @@ def alerts(activities: list[Activity], snapshot: dict[str, Any], household: Hous
                     and 6 <= int(h["time"][11:13]) <= 20 and h.get("pm2_5") is not None]
         best_j = min(same_day, key=lambda j: hourly[j]["pm2_5"]) if same_day else None
         label = aqi_math.CATEGORIES[level].label
-        item = {"activity": act.title, "start": act.start, "who": act.who,
+        item: dict[str, Any] = {"activity": act.title, "start": act.start, "who": act.who,
                 "pm2_5": None if pm is None else round(pm, 1), "level": level, "category": label}
         if level >= threshold:
             alt = hourly[best_j] if best_j is not None else None
@@ -51,7 +51,7 @@ def alerts(activities: list[Activity], snapshot: dict[str, Any], household: Hous
             item["status"] = "warn"
             head = tr(lang, f"Forecast {label} air during '{act.title}'. ",
                       f"'{act.title}' के समय हवा {category(label, 'hi')} रहने का अनुमान है। ")
-            if better:
+            if better and alt is not None:
                 tail = tr(lang, f"Consider moving it to {fmt_hour(alt['time'])} (PM2.5 ≈ {alt['pm2_5']:.0f} vs "
                                 f"{pm:.0f} µg/m³) or doing it indoors.",
                           f"इसे {fmt_hour(alt['time'], 'hi')} पर करें (PM2.5 ≈ {alt['pm2_5']:.0f} बनाम {pm:.0f} µg/m³) "

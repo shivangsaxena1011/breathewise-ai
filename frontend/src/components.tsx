@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, fmtHour, LEVEL_COLORS, type Action, type Hour, type Place } from "./api";
 import { AQI_LABELS_HI } from "./i18n";
+import { prefersReducedMotion } from "./motion";
 import { useApp } from "./store";
 
 export function Sky() {
@@ -18,11 +19,12 @@ export function Sky() {
   );
 }
 
+/** Animate from 0 up to `target` with an ease-out curve; jumps straight there when motion is reduced. */
 export function useCountUp(target: number | null, ms = 1400): number {
   const [v, setV] = useState(0);
+  const reduced = prefersReducedMotion();
   useEffect(() => {
-    if (target == null) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setV(target); return; }
+    if (target == null || reduced) return;
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
@@ -32,10 +34,11 @@ export function useCountUp(target: number | null, ms = 1400): number {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return v;
+  }, [target, ms, reduced]);
+  return reduced ? target ?? 0 : v;
 }
 
+/** AQI category label in the UI language. */
 export function aqiLabel(label: string, lang: string) {
   return lang === "hi" ? AQI_LABELS_HI[label] ?? label : label;
 }
@@ -100,64 +103,97 @@ export function ActionList({ items }: { items: Action[] }) {
   );
 }
 
+/** City search with debounced geocoding. Arrow keys move between results; Escape returns to the field. */
 export function CitySearch({ onPick }: { onPick: (p: Place) => void }) {
-  const { t, lang } = useApp();
+  const { t, tx, lang } = useApp();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Place[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const timer = useRef<number>(0);
-
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const keepClosed = useRef(false); // set when we move focus back to the field ourselves
   const tRef = useRef(t); // read the latest translator without re-running the search on every app update
-  tRef.current = t;
+  useEffect(() => { tRef.current = t; }, [t]);
+
+  const term = q.trim();
+  const shown = term.length >= 2 ? results : [];
   useEffect(() => {
-    window.clearTimeout(timer.current);
-    if (q.trim().length < 2) { setResults([]); return; }
+    if (term.length < 2) return;
     let stale = false; // an older, slower response must not overwrite results for newer text
-    timer.current = window.setTimeout(() => {
-      api.geocode(q.trim(), lang)
+    const timer = window.setTimeout(() => {
+      api.geocode(term, lang)
         .then((r) => {
           if (stale) return;
           setResults(r.results);
           setOpen(true);
           if (r.results.length === 0) setMsg(tRef.current("no_city"));
         })
-        .catch((e) => { if (!stale) setMsg(e.message); });
+        .catch((e: unknown) => { if (!stale) setMsg((e as Error).message); });
     }, 300);
-    return () => { stale = true; window.clearTimeout(timer.current); };
-  }, [q, lang]);
+    return () => { stale = true; window.clearTimeout(timer); };
+  }, [term, lang]);
 
   const pick = (p: Place) => { onPick(p); setQ(""); setResults([]); setOpen(false); };
   const locate = () => {
     if (!navigator.geolocation) { setMsg(t("no_geo")); return; }
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setBusy(false); pick({ name: t("my_location"), lat: +pos.coords.latitude.toFixed(3), lon: +pos.coords.longitude.toFixed(3) }); },
+      (pos) => {
+        setBusy(false);
+        pick({ name: t("my_location"), lat: +pos.coords.latitude.toFixed(3), lon: +pos.coords.longitude.toFixed(3) });
+      },
       () => { setBusy(false); setMsg(t("geo_denied")); },
       { timeout: 10000 },
     );
   };
+  // Close the list once focus leaves the whole search widget (field + results).
+  const closeIfOutside = (e: React.FocusEvent) => {
+    if (!wrapRef.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+  };
+  const resultButtons = () => Array.from(wrapRef.current?.querySelectorAll<HTMLButtonElement>("#city-results button") ?? []);
+  const onResultKey = (e: React.KeyboardEvent, i: number) => {
+    const buttons = resultButtons();
+    if (e.key === "ArrowDown") { e.preventDefault(); buttons[Math.min(i + 1, buttons.length - 1)]?.focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); (i === 0 ? inputRef.current : buttons[i - 1])?.focus(); }
+    if (e.key === "Escape") {
+      e.preventDefault(); // keep the typed text: a search field clears itself on Escape
+      keepClosed.current = true;
+      setOpen(false);
+      inputRef.current?.focus();
+    }
+  };
+  const listOpen = open && shown.length > 0;
 
   return (
     <div className="stack">
       <div className="row">
-        <div className="search" style={{ flex: 1, minWidth: 200 }}
-          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); }}>
+        <div className="search" ref={wrapRef} style={{ flex: 1, minWidth: 200 }}>
           <label className="sr-only" htmlFor="city">{t("search_city")}</label>
-          <input id="city" type="search" role="combobox" placeholder={`🔍 ${t("search_city")}`} value={q} autoComplete="off"
-            aria-expanded={open && results.length > 0} aria-controls="city-results" aria-autocomplete="list"
+          <input id="city" ref={inputRef} type="search" placeholder={`🔍 ${t("search_city")}`} value={q} autoComplete="off"
+            aria-controls="city-results" aria-describedby="city-count"
             onChange={(e) => { setQ(e.target.value); setMsg(null); }}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              if (keepClosed.current) keepClosed.current = false;
+              else setOpen(true);
+            }}
+            onBlur={closeIfOutside}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && results[0]) pick(results[0]);
+              if (e.key === "Enter" && shown[0]) pick(shown[0]);
+              if (e.key === "ArrowDown" && listOpen) { e.preventDefault(); resultButtons()[0]?.focus(); }
               if (e.key === "Escape") setOpen(false);
             }} />
-          {open && results.length > 0 && (
+          <span id="city-count" className="sr-only" aria-live="polite">
+            {listOpen ? tx(`${shown.length} places found. Use the down arrow to browse.`,
+              `${shown.length} जगहें मिलीं। देखने के लिए नीचे वाला तीर दबाएँ।`) : ""}
+          </span>
+          {listOpen && (
             <ul id="city-results" aria-label={t("search_city")}>
-              {results.map((r) => (
+              {shown.map((r, i) => (
                 <li key={`${r.lat},${r.lon}`}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(r)}>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(r)}
+                    onKeyDown={(e) => onResultKey(e, i)} onBlur={closeIfOutside}>
                     <b>{r.name}</b> <span className="muted small">{[r.admin1, r.country].filter(Boolean).join(", ")}</span>
                   </button>
                 </li>
@@ -165,7 +201,9 @@ export function CitySearch({ onPick }: { onPick: (p: Place) => void }) {
             </ul>
           )}
         </div>
-        <button type="button" className="btn ghost" onClick={locate} disabled={busy}>📍 {t("use_location")}</button>
+        <button type="button" className="btn ghost" onClick={locate} disabled={busy} aria-busy={busy}>
+          <span aria-hidden="true">📍</span> {t("use_location")}
+        </button>
       </div>
       {msg && <div className="notice warn" role="alert">{msg}</div>}
     </div>
@@ -206,7 +244,12 @@ export function Assumptions({ items }: { items: string[] }) {
 export function NumInput({ value, onChange, min, max, step = 1 }:
   { value: number; onChange: (n: number) => void; min: number; max: number; step?: number }) {
   const [text, setText] = useState(String(value));
-  useEffect(() => { setText((t) => (Number(t) === value && t !== "" ? t : String(value))); }, [value]);
+  // Follow outside changes to `value` by adjusting state during render (React's recommended pattern, not an effect).
+  const [synced, setSynced] = useState(value);
+  if (synced !== value) {
+    setSynced(value);
+    setText((t) => (Number(t) === value && t !== "" ? t : String(value)));
+  }
   const commit = () => {
     const n = Number(text);
     const clamped = text.trim() !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value;
@@ -224,10 +267,14 @@ export function NumInput({ value, onChange, min, max, step = 1 }:
   );
 }
 
+/** Primary button that shows a spinner (announced as "Please wait…") while `busy`. */
 export function Btn({ busy, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) {
+  const { t } = useApp();
   return (
-    <button className="btn" {...rest} disabled={busy || rest.disabled}>
-      {busy ? <span className="spinner" role="status" aria-label="…" /> : children}
+    <button type="button" className="btn" {...rest} disabled={busy || rest.disabled} aria-busy={busy || undefined}>
+      {busy
+        ? <><span className="spinner" aria-hidden="true" /><span className="sr-only" role="status">{t("busy")}</span></>
+        : children}
     </button>
   );
 }

@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { api, fmtHour, LEVEL_COLORS, type Snapshot, type Station } from "../api";
+import {
+  api, fmtHour, LEVEL_COLORS, levelInk, type ActivityAlert, type GridCell, type Place, type Snapshot, type Station,
+} from "../api";
 import { AqiRing, aqiLabel, Btn, Card, CitySearch, ForecastBars, NumInput } from "../components";
 import { AQI_HEALTH_HI } from "../i18n";
 import { useApp } from "../store";
 
-/** A start time a few hours ahead, in the selected city's own clock (forecast hours are city-local). */
 /** 0 is clean air, not "missing": only null/undefined/NaN show a dash. */
 export function usAqiText(v: number | null | undefined): string {
   return v == null || Number.isNaN(v) ? "—" : String(Math.round(v));
 }
 
+/** A start time a few hours ahead, in the selected city's own clock (forecast hours are city-local). */
 export function cityTimeAhead(snap: Snapshot | null, hoursAhead: number): string {
   const h = snap?.hourly[Math.min((snap?.now_index ?? 0) + hoursAhead, (snap?.hourly.length ?? 1) - 1)];
   if (h) return h.time.slice(0, 16);
@@ -31,7 +33,7 @@ function notify(body: string) {
   } catch { /* notifications are a bonus; the on-page alert already shows the message */ }
 }
 
-/** Live monitoring-station reading. Attribution to the data sources is required by the station data terms. */
+/** Hindi text for a smog driver, filled with the live weather numbers. */
 function driverHi(key: string, snap: Snapshot): string | null {
   const w = snap.weather_now;
   if (key === "low_wind") return `हवा बहुत धीमी है (${Math.round(w.wind_speed_10m ?? 0)} किमी/घंटा) — प्रदूषण दूर नहीं जा रहा।`;
@@ -40,6 +42,7 @@ function driverHi(key: string, snap: Snapshot): string | null {
   return null;
 }
 
+/** Live monitoring-station reading. Attribution to the data sources is required by the station data terms. */
 function StationLine({ st, timeZone }: { st: Station; timeZone: string }) {
   const { t } = useApp();
   // Show the city's own clock time, not the viewer's.
@@ -71,14 +74,13 @@ function StationLine({ st, timeZone }: { st: Station; timeZone: string }) {
 function Guardian() {
   const { t, tx, lang, place, household, snap } = useApp();
   const [title, setTitle] = useState(() => tx("Evening walk", "शाम की सैर"));
-  const [start, setStart] = useState(() => cityTimeAhead(snap, 3));
-  const [edited, setEdited] = useState(false);
-  // When the city (and so its clock) changes, move the default time unless the user picked one.
-  useEffect(() => { if (!edited) setStart(cityTimeAhead(snap, 3)); }, [snap, edited]);
+  // Until the user picks a time, the default follows the selected city's clock.
+  const [picked, setPicked] = useState<string | null>(null);
+  const start = picked ?? cityTimeAhead(snap, 3);
   const [mins, setMins] = useState(45);
   const [sensitive, setSensitive] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [res, setRes] = useState<any[] | null>(null);
+  const [res, setRes] = useState<ActivityAlert[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const run = async () => {
@@ -99,56 +101,83 @@ function Guardian() {
         <label className="field">{t("activity")}<input type="text" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} /></label>
         <div className="row">
           <label className="field" style={{ flex: 2 }}>{t("when")} {snap && <span className="muted">({snap.location.timezone})</span>}
-            <input type="datetime-local" value={start} onChange={(e) => { setStart(e.target.value); setEdited(true); }} /></label>
+            <input type="datetime-local" value={start} onChange={(e) => setPicked(e.target.value)} /></label>
           <label className="field" style={{ flex: 1 }}>{t("minutes")}<NumInput min={5} max={720} value={mins} onChange={setMins} /></label>
         </div>
         <label className="check"><input type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />{t("sensitive")}</label>
         <div className="row">
           <Btn busy={busy} onClick={run} disabled={!title.trim()}>{t("check")}</Btn>
           {"Notification" in window && Notification.permission === "default" && (
-            <button className="btn ghost small" onClick={() => Notification.requestPermission()}>🔔 {t("alerts_btn")}</button>
+            <button type="button" className="btn ghost small" onClick={() => Notification.requestPermission()}>
+              <span aria-hidden="true">🔔</span> {t("alerts_btn")}
+            </button>
           )}
         </div>
         {err && <div className="notice warn" role="alert">{err}</div>}
-        {res?.map((a, i) => (
-          <div key={i} className={`notice ${a.status === "warn" ? "warn" : a.status === "ok" ? "ok" : "info"}`} role="status">
-            <span aria-hidden="true">{a.status === "warn" ? "⚠️" : a.status === "ok" ? "✅" : "ℹ️"}</span>
-            <span>{a.message}</span>
-          </div>
-        ))}
+        <div aria-live="polite" className="stack">
+          {res?.map((a) => (
+            <div key={`${a.activity}-${a.start}`} className={`notice ${ALERT_STYLE[a.status][0]}`}>
+              <span aria-hidden="true">{ALERT_STYLE[a.status][1]}</span>
+              <span>{a.message}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </Card>
   );
 }
 
+const ALERT_STYLE: Record<ActivityAlert["status"], [string, string]> = {
+  warn: ["warn", "⚠️"], ok: ["ok", "✅"], unknown: ["info", "ℹ️"],
+};
+
+/** The API lists the 5×5 grid south→north, west→east; draw rows north-first so north is up. */
+export function northUp(cells: GridCell[], size = 5): GridCell[] {
+  const rows: GridCell[][] = [];
+  for (let i = 0; i < cells.length; i += size) rows.push(cells.slice(i, i + size));
+  return rows.reverse().flat();
+}
+
+const gridKey = (p: Place) => `${p.lat},${p.lon}`;
+
 function AreaGrid() {
   const { t, tx, place } = useApp();
-  const [cells, setCells] = useState<any[] | null>(null);
+  const [grid, setGrid] = useState<{ key: string; cells: GridCell[] } | null>(null);
   useEffect(() => {
     if (!place) return;
-    setCells(null);
+    const key = gridKey(place);
     let stale = false; // a slow response for the previous city must not overwrite this one
-    api.grid(place).then((g) => { if (!stale) setCells(g.cells); }).catch(() => { if (!stale) setCells([]); });
+    api.grid(place)
+      .then((g) => { if (!stale) setGrid({ key, cells: g.cells }); })
+      .catch(() => { if (!stale) setGrid({ key, cells: [] }); });
     return () => { stale = true; };
   }, [place]);
+  const cells = place && grid?.key === gridKey(place) ? grid.cells : null;
   return (
     <Card title={t("area")} icon="🗺️" span={7}>
-      {!cells ? <div className="skeleton" style={{ height: 200 }} /> : cells.length === 0 ? <p className="muted">—</p> : (
-        <>
-          <div className="heat" role="img" aria-label="PM2.5 around you on a 5 by 5 model grid">
-            <span className="sr-only">{tx("North is up.", "ऊपर उत्तर दिशा है।")}</span>
-            {[...cells].reverse().reduce<any[][]>((rows, c, i) => { (rows[Math.floor(i / 5)] ||= []).unshift(c); return rows; }, [])
-              .flat().map((c, i) => (
-                <div key={i} className={i === 12 ? "me" : ""} style={{ background: c.color, animationDelay: `${i * 30}ms` }}
+      {!cells ? <div className="skeleton" role="status" aria-label={t("loading")} style={{ height: 200 }} />
+        : cells.length === 0 ? <p className="muted">—</p> : (
+          <>
+            <div className="heat" role="img"
+              aria-label={tx("PM2.5 around you on a 5 by 5 model grid. North is up; your location is in the centre.",
+                "आपके आसपास PM2.5, 5×5 मॉडल ग्रिड पर। ऊपर उत्तर है; आपकी जगह बीच में है।")}>
+              {northUp(cells).map((c, i) => (
+                <div key={`${c.lat},${c.lon}`} className={i === 12 ? "me" : ""}
+                  style={{ background: c.color, color: levelInk(c.level), animationDelay: `${i * 30}ms` }}
                   title={`PM2.5 ${c.pm2_5 ?? "?"} µg/m³`}>{c.pm2_5 != null ? Math.round(c.pm2_5) : "?"}</div>
               ))}
-          </div>
-          <p className="small muted">{t("area_note")}</p>
-        </>
-      )}
+            </div>
+            <p className="small muted">{t("area_note")}</p>
+          </>
+        )}
     </Card>
   );
 }
+
+const QUICK_CITIES: Place[] = [
+  { name: "Delhi", lat: 28.61, lon: 77.21 }, { name: "Jabalpur", lat: 23.17, lon: 79.95 },
+  { name: "Lucknow", lat: 26.85, lon: 80.95 }, { name: "Mumbai", lat: 19.08, lon: 72.88 },
+];
 
 export default function Today() {
   const { t, lang, place, setPlace, snap, loading, error, offlineSince, refresh } = useApp();
@@ -156,7 +185,10 @@ export default function Today() {
   const when = (iso: string) => `${fmtHour(iso)}${snap && iso.slice(0, 10) !== snap.observed_at.slice(0, 10) ? ` (${t("tomorrow")})` : ""}`;
 
   useEffect(() => {
-    if (snap?.aqi.color) document.documentElement.style.setProperty("--aqi", snap.aqi.color);
+    if (!snap?.aqi.color) return;
+    const root = document.documentElement.style;
+    root.setProperty("--aqi", snap.aqi.color);
+    root.setProperty("--aqi-ink", levelInk(snap.aqi.level));
   }, [snap]);
 
   if (!place) {
@@ -168,8 +200,8 @@ export default function Today() {
           <p className="muted">{t("hero_sub")}</p>
           <div style={{ maxWidth: 520, margin: "18px auto 0", textAlign: "left" }}><CitySearch onPick={setPlace} /></div>
           <div className="chips" style={{ justifyContent: "center", marginTop: 14 }}>
-            {[["Delhi", 28.61, 77.21], ["Jabalpur", 23.17, 79.95], ["Lucknow", 26.85, 80.95], ["Mumbai", 19.08, 72.88]].map(([n, la, lo]) => (
-              <button key={n as string} className="chip" onClick={() => setPlace({ name: n as string, lat: la as number, lon: lo as number })}>{n}</button>
+            {QUICK_CITIES.map((c) => (
+              <button key={c.name} type="button" className="chip" onClick={() => setPlace(c)}>{c.name}</button>
             ))}
           </div>
         </div>
@@ -181,11 +213,22 @@ export default function Today() {
   return (
     <div className="page">
       <div style={{ margin: "14px 0" }}><CitySearch onPick={setPlace} /></div>
-      {offlineSince && <div className="notice info" role="status" style={{ marginBottom: 12 }}>📴 {t("offline")} {new Date(offlineSince).toLocaleString()}</div>}
-      {error && !snap && (
-        <div className="notice warn" role="alert">{error} <button className="btn small" onClick={refresh}>{t("retry")}</button></div>
+      {offlineSince && (
+        <div className="notice info" role="status" style={{ marginBottom: 12 }}>
+          <span aria-hidden="true">📴</span> {t("offline")} {new Date(offlineSince).toLocaleString()}
+        </div>
       )}
-      {loading && !snap && <div className="card"><div className="skeleton" style={{ height: 190 }} /><p className="center muted">{t("loading")}</p></div>}
+      {error && !snap && (
+        <div className="notice warn" role="alert">
+          {error} <button type="button" className="btn small" onClick={refresh}>{t("retry")}</button>
+        </div>
+      )}
+      {loading && !snap && (
+        <div className="card" aria-busy="true">
+          <div className="skeleton" style={{ height: 190 }} />
+          <p className="center muted" role="status">{t("loading")}</p>
+        </div>
+      )}
       {snap && (
         <div className="grid">
           <section className="card span-12 hero" aria-live="polite">
