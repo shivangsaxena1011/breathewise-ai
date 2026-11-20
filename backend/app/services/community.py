@@ -12,6 +12,7 @@ Reports show as "unverified" until several different neighbours confirm them.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import math
@@ -93,7 +94,11 @@ class SQLiteReportStore:
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        with contextlib.suppress(Exception):
+            self._conn.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     async def add(self, report: ReportCreate) -> dict[str, Any]:
         if not moderate(report.description):

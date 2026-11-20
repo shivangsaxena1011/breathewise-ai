@@ -54,8 +54,8 @@ RATE_LIMITED_GET_PREFIXES = ("/api/air", "/api/geocode")
 
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
-    "connect-src 'self'; font-src 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; "
-    "base-uri 'self'"
+    "connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; "
+    "form-action 'self'; frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests"
 )
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",

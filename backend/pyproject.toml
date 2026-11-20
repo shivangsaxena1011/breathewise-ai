@@ -28,6 +28,10 @@ known-first-party = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers"
+filterwarnings = [
+    "ignore:unclosed database in <sqlite3.Connection object:ResourceWarning",
+    "ignore:Exception ignored while finalizing database connection:pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 branch = true

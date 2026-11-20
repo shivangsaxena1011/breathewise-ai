@@ -12,16 +12,25 @@ function newId(): string {
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+function getStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" && "localStorage" in window ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
 function load<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const s = getStorage();
+    const raw = s?.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 function save(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked */ }
+  try { getStorage()?.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked */ }
 }
 
 export const DEFAULT_HOUSEHOLD: Household = {
